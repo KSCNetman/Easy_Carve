@@ -41,14 +41,14 @@ const { chromium } = require('playwright');
   });
   const p = await ctx.newPage();
   const errs = []; p.on('pageerror', e => errs.push(e.message)); p.on('dialog', d => d.accept());
-  await p.goto('file://' + __dirname + '/easy-carve.html');
+  await p.goto('file://' + __dirname + '/../index.html');
   const sim = () => p.evaluate(() => ({ maxRx: __sim.maxRx, n: __sim.lines.length, resets: __sim.resets }));
 
   await p.click('#connectBtn'); await p.waitForTimeout(2500);
   console.log('1. connected; spindle field from $30 =', await p.inputValue('#spindle'), '| status:', (await p.textContent('#status')).slice(0, 40));
 
   // ---- full job, streamed ----
-  await p.setInputFiles('#fileIn', __dirname + '/drawings/hare.jpg'); await p.waitForTimeout(2500);
+  await p.setInputFiles('#fileIn', __dirname + '/../drawings/hare.jpg'); await p.waitForTimeout(2500);
   const jobLines = await p.evaluate(() => EasyCarve.jobLines(EasyCarve.makeGcode().text));
   await p.evaluate(() => { __sim.lines = []; __sim.maxRx = 0; });
   const t0 = Date.now(); await p.click('#startBtn');

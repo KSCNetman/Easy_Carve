@@ -1269,7 +1269,7 @@ function emitPaths(g, paths, S, Z, dia) {
     g.push(`G0 Z${Z(0.5)}`);
     for (let k = 1; k <= passes; k++) {
       if (k > 1 && !p.closed) pts = pts.reverse();
-      g.push(`G1 Z${Z(-Math.min(depth, k * S.step))} F${fmt(S.plunge)}`); plunges += depth / passes;
+      g.push(`G1 Z${Z(-(passes === 1 ? depth : Math.min(depth, k * S.step)))} F${fmt(S.plunge)}`); plunges += depth / passes;
       for (let i = 1; i < pts.length; i++) {
         g.push(`G1 X${fmt(pts[i][0])} Y${fmt(pts[i][1])}` + (i === 1 ? ` F${fmt(S.feed)}` : ""));
         cutLen += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
