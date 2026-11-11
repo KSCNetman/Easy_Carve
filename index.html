@@ -14,6 +14,17 @@
   }
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
+  /* every setting row: words on the left, one fixed-width column of boxes on the right, units lined up */
+  .panel label:not(.check):not(.modes label), dialog label:not(.check) {
+    display: grid; grid-template-columns: minmax(0, 1fr) 215px; align-items: center; column-gap: 10px; }
+  .ctl { display: flex; align-items: center; gap: 6px; width: 215px; }
+  .ctl > input[type=number], .ctl > input:not([type]), .ctl > select { flex: 1; min-width: 0; width: auto; max-width: none; }
+  .ctl > input[type=range] { flex: 1; width: auto; min-width: 0; }
+  .ctl .unit { width: 50px; flex: none; color: var(--muted); font-size: 14px; white-space: nowrap; }
+  .row > * { flex: 1 1 0; min-width: 0; }
+  .ctl small { color: var(--muted); font-size: 12px; }
+  .modes { grid-auto-rows: 1fr; }
+  .row.small { align-items: stretch; }
   body { margin: 0; font: 17px/1.4 system-ui, "Segoe UI", sans-serif; color: var(--ink); background: var(--bg); }
   header { display: flex; align-items: center; gap: 16px; padding: 12px 20px; background: var(--panel); border-bottom: 1px solid var(--line); }
   header h1 { margin: 0; font-size: 22px; }
@@ -110,7 +121,7 @@
 <body>
 <header>
   <h1>Easy Carve</h1>
-  <span class="hint">for Genmitsu PROVerXL 4030 · v1.1</span>
+  <span class="hint">for Genmitsu PROVerXL 4030 · v1.2</span>
   <a href="quick-guide.pdf" target="_blank" class="hint" style="margin-left:auto">Quick guide (PDF)</a>
   <button id="installBtn" hidden style="padding:6px 12px">Install on this computer</button>
   <span id="connBadge" style="margin-left:0">Machine not connected</span>
@@ -156,7 +167,7 @@
           <option value="relief">a drawing – 3D raised carving</option>
           <option value="logo">a black &amp; white logo</option>
         </select></label>
-        <label id="detailRow">Pencil to pick up <span class="hint">less</span><input id="detail" type="range" min="1" max="9" step="1" value="5"><span class="hint">more</span></label>
+        <label id="detailRow">Pencil to pick up <span><small>less</small><input id="detail" type="range" min="1" max="9" step="1" value="5"><small>more</small></span></label>
         <label id="threshRow" hidden>What counts as dark <input id="thresh" type="range" min="0.1" max="0.9" step="0.05" value="0.5"></label>
         <label id="invertRow" class="check" hidden><input type="checkbox" id="invert"><span>Swap light and dark</span></label>
         <div class="hint">Photo tips: lay the drawing flat, use even daylight, fill the frame. Shading is mostly ignored; strong pencil lines are kept.</div>
@@ -182,6 +193,9 @@
           <option value="jigsaw">🧩 Jigsaw puzzle over the selected piece</option></select>
       </div>
       <div class="row small"><button id="dupBtn">Duplicate</button><button id="copiesBtn">Copies…</button><button id="delBtn">Remove</button></div>
+      <div class="hint" id="alignHint" style="margin-top:6px">Line up this piece <span id="alignOn"></span> (or drag it – it snaps into line):</div>
+      <div class="row small"><button data-align="x" title="Centre left to right">⇹ Across</button><button data-align="y" title="Centre front to back">⇕ Up/down</button><button data-align="xy">✛ Centre</button></div>
+      <div class="row small"><button data-align="left">⇤ Left</button><button data-align="right">Right ⇥</button><button data-align="spread" title="Space all pieces evenly across">↔ Spread</button></div>
     </div>
     <label>How wide <span><input id="width" type="number" value="100" min="1" step="1"> mm</span></label>
     <div class="hint">Height: <b id="heightOut">–</b> mm (it keeps its shape)</div>
@@ -346,7 +360,7 @@
 
 <script>
 "use strict";
-const APP = "Easy Carve v1.1";
+const APP = "Easy Carve v1.2";
 const $ = id => document.getElementById(id);
 
 // ================= Presets =================
@@ -1030,6 +1044,7 @@ function renderItemList() {
     box.append(b);
   }
   $("dupBtn").disabled = $("copiesBtn").disabled = $("delBtn").disabled = !sel();
+  if (typeof updateAlignHint === "function") updateAlignHint();
   $("openBtn").textContent = sel() ? "Swap the selected piece for another file…" : "Open design…";
   $("useTextBtn").textContent = sel() && sel().design.isText ? "Change this text" : "Use this text";
 }
@@ -1486,6 +1501,11 @@ function draw() {
     ctx.beginPath(); ctx.arc(X(b.x + b.w / 2), Y(b.y + b.h) - 22, 7, 0, 7); ctx.fill();   // rotate handle
     ctx.beginPath(); ctx.moveTo(X(b.x + b.w / 2), Y(b.y + b.h)); ctx.lineTo(X(b.x + b.w / 2), Y(b.y + b.h) - 15); ctx.stroke();
   }
+  if (drag && drag.guides) {
+    ctx.strokeStyle = "#e3008c"; ctx.lineWidth = 1; ctx.setLineDash([6, 4]);
+    for (const g of drag.guides) { ctx.beginPath(); if (g.x != null) { ctx.moveTo(X(g.x), 0); ctx.lineTo(X(g.x), H); } else { ctx.moveTo(0, Y(g.y)); ctx.lineTo(W, Y(g.y)); } ctx.stroke(); }
+    ctx.setLineDash([]);
+  }
   ctx.fillStyle = "#cf222e"; ctx.beginPath(); ctx.arc(X(0), Y(0), 6, 0, 7); ctx.fill();
   ctx.fillText("Start corner", X(0) + 10, Y(0) - 8);
   if (machinePos) {
@@ -1520,7 +1540,25 @@ cv.addEventListener("pointerdown", e => {
 cv.addEventListener("pointermove", e => {
   if (!drag) return;
   const r = cv.getBoundingClientRect(), [mx, my] = view.toMm(e.clientX - r.left, e.clientY - r.top), it = drag.item;
-  if (drag.kind === "move") { it.x = Math.round((mx - drag.dx) * 2) / 2; it.y = Math.round((my - drag.dy) * 2) / 2; }
+  if (drag.kind === "move") {
+    it.x = Math.round((mx - drag.dx) * 2) / 2; it.y = Math.round((my - drag.dy) * 2) / 2;
+    // snap to other pieces' centres and edges
+    const b = itemBox(it), tol = 7 / view.sc; drag.guides = [];
+    const mine = { x: [b.x, b.x + b.w / 2, b.x + b.w], y: [b.y, b.y + b.h / 2, b.y + b.h] };
+    let bestX = null, bestY = null;
+    for (const o of items) {
+      if (o.id === it.id) continue;
+      const q = itemBox(o), theirs = { x: [q.x, q.x + q.w / 2, q.x + q.w], y: [q.y, q.y + q.h / 2, q.y + q.h] };
+      for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) {
+        if ((i === 1) !== (j === 1)) continue;                      // centre to centre, edge to edge
+        const dx = theirs.x[j] - mine.x[i], dy = theirs.y[j] - mine.y[i];
+        if (Math.abs(dx) < tol && (!bestX || Math.abs(dx) < Math.abs(bestX.d))) bestX = { d: dx, at: theirs.x[j] };
+        if (Math.abs(dy) < tol && (!bestY || Math.abs(dy) < Math.abs(bestY.d))) bestY = { d: dy, at: theirs.y[j] };
+      }
+    }
+    if (bestX) { it.x += bestX.d; drag.guides.push({ x: bestX.at }); }
+    if (bestY) { it.y += bestY.d; drag.guides.push({ y: bestY.at }); }
+  }
   else if (drag.kind === "size") { const nw = Math.max(5, mx - drag.b.x); it.w = Math.round(drag.w0 * nw / drag.b.w); }
   else { const cx = drag.b.x + drag.b.w / 2, cy = drag.b.y + drag.b.h / 2; let a = Math.atan2(my - cy, mx - cx) * 180 / Math.PI - 90; it.rot = Math.round(-a / 5) * 5; it.rot = ((it.rot % 360) + 360) % 360; }
   writePos(it); draw();
@@ -1582,6 +1620,40 @@ function download(name, text) {
   a.href = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
   a.download = name; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+// ----- lining pieces up -----
+function alignTarget(it) {
+  const others = items.filter(o => o.id !== it.id);
+  if (!others.length) return null;
+  const b = itemBox(it);
+  const area = o => { const q = itemBox(o); return q.w * q.h; };
+  const around = others.filter(o => { const q = itemBox(o); return q.x <= b.x + 0.5 && q.y <= b.y + 0.5 && q.x + q.w >= b.x + b.w - 0.5 && q.y + q.h >= b.y + b.h - 0.5; });
+  return (around.length ? around : others).sort((a, c) => area(c) - area(a))[0];
+}
+function alignPiece(kind) {
+  const it = sel(); if (!it) return;
+  if (kind === "spread") {
+    const row = items.slice().sort((a, c) => itemBox(a).x - itemBox(c).x);
+    if (row.length < 3) return alert("Space evenly needs three or more pieces.");
+    const first = itemBox(row[0]), last = itemBox(row[row.length - 1]);
+    const total = row.reduce((s, o) => s + itemBox(o).w, 0), gap = (last.x + last.w - first.x - total) / (row.length - 1);
+    let x = first.x; for (const o of row) { o.x = Math.round(x * 2) / 2; x += itemBox(o).w + gap; }
+  } else {
+    const t = alignTarget(it); if (!t) return alert("Add another piece first – this lines the selected piece up with it.");
+    const tb = itemBox(t), b = itemBox(it);
+    if (kind === "x" || kind === "xy") it.x = tb.x + (tb.w - b.w) / 2;
+    if (kind === "y" || kind === "xy") it.y = tb.y + (tb.h - b.h) / 2;
+    if (kind === "left") it.x = tb.x;
+    if (kind === "right") it.x = tb.x + tb.w - b.w;
+  }
+  selectItem(it.id);
+}
+document.querySelectorAll("[data-align]").forEach(b => b.onclick = () => alignPiece(b.dataset.align));
+function updateAlignHint() {
+  const it = sel(), t = it && alignTarget(it);
+  $("alignOn").textContent = t ? `with “${t.name}”` : "";
+  document.querySelectorAll("[data-align]").forEach(b => b.disabled = !it || (b.dataset.align === "spread" ? items.length < 3 : !t));
 }
 
 // ----- item buttons -----
@@ -2822,6 +2894,30 @@ let installPrompt = null;
 window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installPrompt = e; $("installBtn").hidden = false; });
 $("installBtn").onclick = async () => { if (!installPrompt) return; installPrompt.prompt(); await installPrompt.userChoice; installPrompt = null; $("installBtn").hidden = true; };
 
+// ----- line up all the setting boxes -----
+function tidyRows(root = document) {
+  root.querySelectorAll(".panel label:not(.check), dialog label:not(.check)").forEach(l => {
+    if (l.closest(".modes") || l.dataset.tidy) return;
+    const kids = [...l.childNodes];
+    const first = kids.findIndex(n => n.nodeType === 1 && (n.matches("input, select, textarea") || n.querySelector("input, select, textarea")));
+    if (first < 0) return;
+    let ctl = kids[first];
+    if (!(ctl.tagName === "SPAN" && ctl.querySelector("input, select"))) {      // bare control: wrap it
+      const sp = document.createElement("span"); l.insertBefore(sp, ctl); kids.slice(first).forEach(n => sp.append(n)); ctl = sp;
+    }
+    ctl.classList.add("ctl");
+    const field = ctl.querySelector("input[type=number], input:not([type])");
+    if (field && !ctl.querySelector(".unit") && !ctl.querySelector("input[type=range]")) {
+      const u = document.createElement("span"); u.className = "unit";
+      [...ctl.childNodes].filter(n => n.nodeType === 3).forEach(n => { u.textContent += n.textContent.trim(); n.remove(); });
+      ctl.append(u);
+    }
+    l.dataset.tidy = "1";
+  });
+}
+tidyRows();
+new MutationObserver(() => tidyRows($("wiz"))).observe($("wiz"), { childList: true, subtree: true });
+
 // ----- menu tabs -----
 function showTab(name) {
   document.querySelectorAll(".panel > .step").forEach(el => el.classList.toggle("active", el.id === "tab-" + name));
@@ -2833,7 +2929,7 @@ document.querySelectorAll(".nextBtn").forEach(b => b.onclick = () => showTab(b.d
 let startTab = "design"; try { startTab = localStorage.getItem("easyCarve.tab") || "design"; } catch {}
 showTab($("tab-" + startTab) ? startTab : "design");
 
-window.EasyCarve = { items: () => items, showTab, straightenPage, serializeJob, loadJob, diaryLoad, announce, sim: () => simState, simulateJob, openPreview, finishSim, centreOnBoard, board, makeInlay, inlayMaleModel, startProject, jigsawDesign, PROJECTS, buildJob, selectItem, addItem, shapeDesign, loadSvgText, makeGcode, makeTextDesign, setDesign, buildReport, explain, onLine, resumePlan, jobLines };
+window.EasyCarve = { items: () => items, alignPiece, showTab, straightenPage, serializeJob, loadJob, diaryLoad, announce, sim: () => simState, simulateJob, openPreview, finishSim, centreOnBoard, board, makeInlay, inlayMaleModel, startProject, jigsawDesign, PROJECTS, buildJob, selectItem, addItem, shapeDesign, loadSvgText, makeGcode, makeTextDesign, setDesign, buildReport, explain, onLine, resumePlan, jobLines };
 </script>
 </body>
 </html>
