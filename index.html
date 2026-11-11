@@ -1,0 +1,1739 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Easy Carve</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#1f6feb">
+<style>
+  :root {
+    --bg: #f4f2ee; --panel: #ffffff; --ink: #1d1d1f; --muted: #6b6b70; --line: #dddad3;
+    --accent: #1f6feb; --go: #1a7f37; --stop: #cf222e; --warn: #9a6700; --warnbg: #fff8c5; --errbg: #ffebe9;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; font: 17px/1.4 system-ui, "Segoe UI", sans-serif; color: var(--ink); background: var(--bg); }
+  header { display: flex; align-items: center; gap: 16px; padding: 12px 20px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  header h1 { margin: 0; font-size: 22px; }
+  #connBadge { margin-left: auto; padding: 4px 12px; border-radius: 999px; background: #eee; font-size: 15px; }
+  #connBadge.on { background: #dafbe1; color: var(--go); }
+  main { display: grid; grid-template-columns: 430px 1fr; gap: 16px; padding: 16px; min-height: calc(100vh - 60px); }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .panel { display: flex; flex-direction: column; gap: 16px; }
+  .step { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  .step h2 { margin: 0 0 12px; font-size: 19px; display: flex; align-items: center; gap: 10px; }
+  .num { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 16px; }
+  label { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 8px 0; }
+  label.check { justify-content: flex-start; align-items: flex-start; }
+  label.check input { margin-top: 4px; width: 20px; height: 20px; flex: none; }
+  input[type=number] { width: 90px; font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; text-align: right; }
+  input[type=range] { width: 170px; }
+  textarea { width: 100%; font: inherit; font-size: 20px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; resize: vertical; }
+  select { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; max-width: 250px; }
+  button { font: inherit; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--line); background: #fafafa; cursor: pointer; }
+  button:hover:not(:disabled) { background: #f0f0f0; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  button.big { width: 100%; padding: 14px; font-size: 18px; font-weight: 600; background: var(--accent); color: #fff; border: none; }
+  button.big:hover:not(:disabled) { background: #1a5fcc; }
+  button.go { background: var(--go); }
+  button.go:hover:not(:disabled) { background: #156b2e; }
+  button.stop { background: var(--stop); color: #fff; border: none; font-weight: 700; }
+  button.stop:hover:not(:disabled) { background: #a81c25; }
+  .row { display: flex; gap: 8px; margin: 8px 0; }
+  .row > * { flex: 1; }
+  .hint { color: var(--muted); font-size: 15px; margin: 4px 0; }
+  .warn { background: var(--warnbg); color: var(--warn); padding: 8px 10px; border-radius: 8px; font-size: 15px; margin: 8px 0; }
+  .err { background: var(--errbg); color: var(--stop); padding: 10px; border-radius: 8px; font-size: 15px; margin: 8px 0; }
+  .err b { display: block; }
+  .tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px; }
+  .tabs button.sel { background: #eef4ff; border-color: var(--accent); font-weight: 600; }
+  .modes { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px; }
+  .modes label { display: block; margin: 0; border: 2px solid var(--line); border-radius: 10px; padding: 8px; cursor: pointer; }
+  .modes input { display: none; }
+  .modes label:has(input:checked) { border-color: var(--accent); background: #eef4ff; }
+  .modes b { display: block; }
+  .modes span { font-size: 13px; color: var(--muted); }
+  details { margin-top: 8px; }
+  summary { cursor: pointer; color: var(--muted); }
+  .status { padding: 10px; border-radius: 8px; background: #f2f2f2; margin: 8px 0; font-weight: 600; }
+  .status small { display: block; font-weight: 400; color: var(--muted); }
+  .jog { display: grid; grid-template-columns: repeat(3, 56px) 20px 56px; grid-template-rows: repeat(3, 48px); gap: 6px; justify-content: center; margin: 10px 0; }
+  .jog button { padding: 0; font-size: 20px; }
+  .stepsel { display: flex; gap: 6px; justify-content: center; align-items: center; }
+  .stepsel button.sel { background: var(--accent); color: #fff; border-color: var(--accent); }
+  progress { width: 100%; height: 18px; margin-top: 8px; }
+  .view { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; min-height: 420px;
+          position: sticky; top: 16px; height: calc(100vh - 92px); }
+  @media (max-width: 900px) { .view { position: static; height: 70vh; } }
+  #cvWrap { flex: 1; position: relative; min-height: 380px; }
+  canvas#cv { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .legend { color: var(--muted); font-size: 14px; display: flex; gap: 18px; flex-wrap: wrap; padding-top: 8px; }
+  .legend i { display: inline-block; width: 18px; height: 4px; vertical-align: middle; margin-right: 6px; }
+  #log, #report { font: 13px/1.3 ui-monospace, Consolas, monospace; max-height: 180px; overflow: auto; background: #f7f7f7; padding: 8px; border-radius: 8px; white-space: pre-wrap; }
+  #report { width: 100%; height: 160px; border: 1px solid var(--line); }
+  #hiddenSvg { position: absolute; left: -10000px; top: 0; width: 1000px; height: 1000px; visibility: hidden; }
+  dialog { border: none; border-radius: 14px; padding: 22px; max-width: 540px; width: calc(100% - 32px); font: inherit; }
+  dialog::backdrop { background: rgba(0,0,0,.45); }
+  dialog h2 { margin: 0 0 10px; font-size: 21px; }
+  dialog ol, dialog ul { padding-left: 22px; } dialog li { margin: 4px 0; }
+  #wizBtns button { flex: 1; }
+  #wizBtns button.yes { background: var(--go); color: #fff; border: none; }
+  #wizBtns button.no { background: var(--stop); color: #fff; border: none; }
+  #wizBtns button.main { background: var(--accent); color: #fff; border: none; }
+  .ok { background: #dafbe1; color: var(--go); padding: 8px 10px; border-radius: 8px; }
+  #busy { position: fixed; inset: auto 20px 20px auto; background: #1d1d1f; color: #fff; padding: 8px 14px; border-radius: 8px; display: none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Easy Carve</h1>
+  <span class="hint">for Genmitsu PROVerXL 4030 · v0.5</span>
+  <a href="quick-guide.pdf" target="_blank" class="hint" style="margin-left:auto">Quick guide (PDF)</a>
+  <button id="installBtn" hidden style="padding:6px 12px">Install on this computer</button>
+  <span id="connBadge" style="margin-left:0">Machine not connected</span>
+</header>
+
+<main>
+<section class="panel">
+
+  <div class="step">
+    <h2><span class="num">1</span> Pick your design</h2>
+    <div class="tabs"><button id="tabFile" class="sel">Open a file</button><button id="tabText">Type some text</button></div>
+
+    <div id="paneFile">
+      <button id="openBtn" class="big">Open design…</button>
+      <input type="file" id="fileIn" accept=".svg,image/svg+xml,image/png,image/jpeg,image/bmp,image/gif,image/webp" hidden>
+      <div class="hint">SVG drawings, or a picture/logo (PNG, JPG). Pictures work best as black on white.</div>
+      <div id="imgOpts" hidden>
+        <label>The picture is <select id="imgKind">
+          <option value="lines">a drawing – carve its lines</option>
+          <option value="shape">a drawing – cut out its shape</option>
+          <option value="relief">a drawing – 3D raised carving</option>
+          <option value="logo">a black &amp; white logo</option>
+        </select></label>
+        <label id="detailRow">Pencil to pick up <span class="hint">less</span><input id="detail" type="range" min="1" max="9" step="1" value="5"><span class="hint">more</span></label>
+        <label id="threshRow" hidden>What counts as dark <input id="thresh" type="range" min="0.1" max="0.9" step="0.05" value="0.5"></label>
+        <label id="invertRow" class="check" hidden><input type="checkbox" id="invert"><span>Swap light and dark</span></label>
+        <div class="hint">Photo tips: lay the drawing flat, use even daylight, fill the frame. Shading is mostly ignored; strong pencil lines are kept.</div>
+      </div>
+    </div>
+
+    <div id="paneText" hidden>
+      <textarea id="textIn" rows="2" placeholder="Type here, e.g. The Smiths">Hello</textarea>
+      <label>Font <select id="fontSel"></select></label>
+      <label class="check"><input type="checkbox" id="boldIn" checked><span>Bold (easier to carve)</span></label>
+      <button id="useTextBtn" class="big">Use this text</button>
+    </div>
+
+    <div id="fileName" class="hint"></div>
+    <label>How wide <span><input id="width" type="number" value="100" min="1" step="1"> mm</span></label>
+    <div class="hint">Height: <b id="heightOut">–</b> mm (it keeps its shape)</div>
+    <label>Gap from left edge <span><input id="offX" type="number" value="10" step="1"> mm</span></label>
+    <label>Gap from front edge <span><input id="offY" type="number" value="10" step="1"> mm</span></label>
+  </div>
+
+  <div class="step">
+    <h2><span class="num">2</span> How to cut it</h2>
+    <div class="modes">
+      <label><input type="radio" name="mode" value="engrave" checked><b>Engrave</b><span>Carve along the lines</span></label>
+      <label><input type="radio" name="mode" value="pocket"><b>Carve out</b><span>Hollow out the shapes / letters</span></label>
+      <label><input type="radio" name="mode" value="cut"><b>Cut out</b><span>Cut right through</span></label>
+      <label><input type="radio" name="mode" value="relief"><b>3D raised</b><span>Rounded carving that stands up</span></label>
+    </div>
+    <label>Material <select id="material"></select></label>
+    <label>Bit <select id="bit"></select></label>
+    <label id="depthRow">How deep <span><input id="depth" type="number" value="1.5" min="0.1" step="0.1"> mm</span></label>
+    <div id="reliefRows" hidden>
+      <label>How tall it stands <span><input id="rH" type="number" value="4" min="0.5" step="0.5"> mm</span></label>
+      <label>How rounded the edges <span><input id="rRound" type="number" value="6" min="0" step="1"> mm</span></label>
+      <div class="hint">0 = straight sides like a stamp; bigger = softer, more domed.</div>
+      <label>Border around it <span><input id="rBorder" type="number" value="8" min="3" step="1"> mm</span></label>
+      <label id="rLinesRow" class="check"><input type="checkbox" id="rLines" checked><span>Carve the drawing's lines into the surface</span></label>
+      <label>Line depth <span><input id="rLineD" type="number" value="1" min="0.2" step="0.2"> mm</span></label>
+      <label>Finish <select id="rFinish">
+        <option value="0.08">Smooth (slowest)</option>
+        <option value="0.12" selected>Normal</option>
+        <option value="0.2">Quick (ridged)</option>
+      </select></label>
+    </div>
+    <label id="thickRow" hidden>Material thickness <span><input id="thick" type="number" value="6" min="0.5" step="0.5"> mm</span></label>
+    <label id="exactRow" class="check" hidden><input type="checkbox" id="exact" checked>
+      <span>Cut around the outside so the piece comes out exactly the size shown</span></label>
+    <label id="skinRow" class="check" hidden><input type="checkbox" id="skin" checked>
+      <span>Leave a thin skin (0.4 mm) so the piece can't fly loose. Snap it out and sand afterwards.</span></label>
+    <details>
+      <summary>Advanced settings (the material picks these for you)</summary>
+      <label>Cutting speed <span><input id="feed" type="number" step="50"> mm/min</span></label>
+      <label>Plunge speed <span><input id="plunge" type="number" step="25"> mm/min</span></label>
+      <label>Depth per pass <span><input id="stepdown" type="number" step="0.1"> mm</span></label>
+      <label>Spindle speed (0–max) <span><input id="spindle" type="number" value="1000" step="50"></span></label>
+      <label>Lift height between cuts <span><input id="safe" type="number" value="5" step="1"> mm</span></label>
+    </details>
+    <div id="estimate" class="hint"></div>
+    <div id="boundsWarn" class="warn" hidden></div>
+    <button id="saveBtn" disabled>Save G-code file (to use in other software)</button>
+  </div>
+
+  <div class="step">
+    <h2><span class="num">3</span> Cut it</h2>
+    <div id="noSerial" class="warn" hidden>This browser can't talk to the machine. Open this file in <b>Google Chrome</b> or <b>Microsoft Edge</b> on a computer.</div>
+    <button id="connectBtn" class="big">Connect to machine</button>
+    <div id="status" class="status">Not connected<small>Plug in the USB cable, switch the machine on, then press Connect.</small></div>
+    <div id="errBox" class="err" hidden></div>
+    <button id="checkBtn" disabled>First time? Check my machine (5-minute test)</button>
+    <button id="wizResume" class="big" hidden>Bit is in place – carry on with the machine check</button>
+    <div class="row"><button id="homeBtn" disabled>Home</button><button id="unlockBtn" disabled>Unlock</button><button id="gotoZeroBtn" disabled>Go to start corner</button></div>
+
+    <div class="hint">Move the bit:</div>
+    <div class="jog">
+      <span></span><button data-jog="Y+" disabled title="Away from you">↑</button><span></span><span></span><button data-jog="Z+" disabled title="Bit up">Z↑</button>
+      <button data-jog="X-" disabled title="Left">←</button><span></span><button data-jog="X+" disabled title="Right">→</button><span></span><span></span>
+      <span></span><button data-jog="Y-" disabled title="Towards you">↓</button><span></span><span></span><button data-jog="Z-" disabled title="Bit down">Z↓</button>
+    </div>
+    <div class="stepsel">Move by <button data-step="0.1">0.1</button><button data-step="1">1</button><button data-step="10" class="sel">10</button> mm</div>
+
+    <div class="row" style="margin-top:12px"><button id="zeroXYBtn" disabled>Bit is over the front-left corner → set as start</button></div>
+    <div class="row"><button id="zeroZBtn" disabled>Bit is touching the top of the wood → set as surface</button></div>
+    <details id="probeBox"><summary>Or find the surface with the touch plate (more accurate)</summary>
+      <label>Plate thickness <span><input id="plateT" type="number" step="0.01" min="0" placeholder="measure"> mm</span></label>
+      <div class="hint">Measure the plate once with a ruler or calipers; it's remembered. To test the clip, touch the plate against the bit: <b id="probeTest">–</b></div>
+      <div class="row"><button id="probeBtn" disabled>Find the surface with the touch plate</button></div>
+    </details>
+
+    <label class="check"><input type="checkbox" id="airRun">
+      <span><b>Test run in the air.</b> Runs the whole job with the bit kept above the wood, to check it's in the right place.</span></label>
+
+    <div class="row"><button id="startBtn" class="big go" disabled>Start</button></div>
+    <div id="resumeBox" class="warn" hidden><div id="resumeText"></div><div class="row"><button id="resumeBtn">Carry on from where it stopped</button></div></div>
+    <div class="row"><button id="pauseBtn" disabled>Pause</button><button id="stopBtn" class="stop" disabled>STOP</button></div>
+    <progress id="prog" value="0" max="1"></progress>
+    <div id="progText" class="hint"></div>
+    <div class="hint">Keep this window open while it cuts. The screen is kept on automatically.</div>
+
+    <details id="helpBox">
+      <summary>Something wrong? Help &amp; machine info</summary>
+      <p class="hint">Press <b>Copy report</b> and paste it to whoever is helping you. It has the machine's settings, its last messages and any error codes. Nothing is sent anywhere by itself.</p>
+      <div class="row"><button id="readInfoBtn" disabled>Read machine settings</button><button id="copyReportBtn">Copy report</button></div>
+      <textarea id="report" readonly hidden></textarea>
+      <details><summary>Machine messages</summary><div id="log"></div></details>
+      <details><summary>What the error numbers mean</summary><div id="codeList" class="hint"></div></details>
+    </details>
+  </div>
+
+</section>
+
+<section class="view">
+  <label class="check" style="margin:0 0 6px"><input type="checkbox" id="zoom"><span>Zoom in on the design</span></label>
+  <div id="cvWrap"><canvas id="cv"></canvas></div>
+  <div class="legend">
+    <span><i style="background:#1f6feb"></i>Bit path</span>
+    <span><i style="background:#888"></i>Your design</span>
+    <span><i style="background:#cf222e"></i>Start corner (front-left)</span>
+    <span><i style="background:#bbb"></i>Machine area</span>
+    <span><i style="background:#1a7f37"></i>Where the bit is now</span>
+  </div>
+</section>
+</main>
+
+<div id="hiddenSvg"></div>
+<div id="busy">Working…</div>
+<dialog id="wiz"><h2 id="wizTitle"></h2><div id="wizBody"></div><div class="row" id="wizBtns"></div></dialog>
+
+<script>
+"use strict";
+const APP = "Easy Carve v0.5";
+const $ = id => document.getElementById(id);
+
+// ================= Presets =================
+const MATERIALS = {
+  pine:    { name: "Soft wood (pine, spruce)",  feed: 800, plunge: 300, step: 1.0 },
+  ply:     { name: "Plywood",                   feed: 700, plunge: 250, step: 1.0 },
+  mdf:     { name: "MDF",                       feed: 900, plunge: 300, step: 1.2 },
+  hard:    { name: "Hardwood (oak, walnut)",    feed: 600, plunge: 200, step: 0.7 },
+  acrylic: { name: "Acrylic / plastic",         feed: 600, plunge: 200, step: 0.5 },
+};
+const BITS = {
+  flat3: { name: 'Flat 3.175 mm (1/8") – came with machine', dia: 3.175, stepMul: 1.0, feedMul: 1.0 },
+  vbit:  { name: "V-bit (sharp lettering)",                    dia: 0.6,   stepMul: 0.6, feedMul: 0.8, vbit: true },
+  flat1: { name: "Flat 1 mm (fine detail)",                    dia: 1.0,   stepMul: 0.4, feedMul: 0.6 },
+  flat6: { name: "Flat 6 mm",                                  dia: 6.0,   stepMul: 1.2, feedMul: 1.0 },
+  ball3: { name: "Ball-nose 3.175 mm (for 3D)",                dia: 3.175, stepMul: 0.8, feedMul: 1.0, ball: true },
+  ball6: { name: "Ball-nose 6 mm (for 3D, faster)",            dia: 6.0,   stepMul: 1.0, feedMul: 1.0, ball: true },
+};
+const FONTS = ["Arial", "Arial Black", "Verdana", "Georgia", "Times New Roman", "Impact", "Comic Sans MS",
+               "Trebuchet MS", "Courier New", "Segoe Script", "Brush Script MT", "Stencil", "Cooper Black", "Bahnschrift"];
+const BED = { w: 400, h: 300 };
+const SKIN = 0.4;
+
+for (const [k, m] of Object.entries(MATERIALS)) $("material").add(new Option(m.name, k));
+for (const [k, b] of Object.entries(BITS)) $("bit").add(new Option(b.name, k));
+for (const f of FONTS) { const o = new Option(f, f); o.style.fontFamily = `"${f}"`; $("fontSel").add(o); }
+
+function applyPreset() {
+  const m = MATERIALS[$("material").value], b = BITS[$("bit").value];
+  $("feed").value = Math.round(m.feed * b.feedMul / 10) * 10;
+  $("plunge").value = Math.round(m.plunge * b.feedMul / 10) * 10;
+  $("stepdown").value = +(m.step * b.stepMul).toFixed(2);
+  refresh();
+}
+$("material").onchange = applyPreset;
+$("bit").onchange = applyPreset;
+
+const mode = () => document.querySelector("input[name=mode]:checked").value;
+function showModeRows() {
+  const cut = mode() === "cut", rel = mode() === "relief";
+  $("depthRow").hidden = cut || rel; $("thickRow").hidden = !cut; $("skinRow").hidden = !cut; $("exactRow").hidden = !cut;
+  $("reliefRows").hidden = !rel;
+}
+document.querySelectorAll("input[name=mode]").forEach(r => r.onchange = () => {
+  showModeRows();
+  const cut = mode() === "cut";
+  const rel = mode() === "relief";
+  $("depthRow").hidden = cut || rel; $("thickRow").hidden = !cut; $("skinRow").hidden = !cut; $("exactRow").hidden = !cut;
+  $("reliefRows").hidden = !rel;
+  if (rel && !BITS[$("bit").value].ball) { $("bit").value = "ball3"; applyPreset(); return; }
+  if (!rel && BITS[$("bit").value].ball) { $("bit").value = "flat3"; applyPreset(); return; }
+  refresh();
+});
+["width", "offX", "offY", "depth", "thick", "skin", "exact", "rH", "rRound", "rBorder", "rLines", "rLineD", "rFinish", "feed", "plunge", "stepdown", "spindle", "safe", "airRun"]
+  .forEach(id => $(id).addEventListener("input", refresh));
+$("zoom").addEventListener("change", draw);
+$("rFinish").addEventListener("change", refresh);
+
+$("tabFile").onclick = () => { $("tabFile").classList.add("sel"); $("tabText").classList.remove("sel"); $("paneFile").hidden = false; $("paneText").hidden = true; };
+$("tabText").onclick = () => { $("tabText").classList.add("sel"); $("tabFile").classList.remove("sel"); $("paneText").hidden = false; $("paneFile").hidden = true; };
+
+function busy(on) { $("busy").style.display = on ? "block" : "none"; }
+const nextFrame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+
+// ================= Geometry helpers =================
+let designSeq = 0;
+let design = null; // { id, paths:[{pts,closed}], w, h, naturalMm, name, source }
+
+// raw: arrays of [x,y] with Y pointing DOWN (screen/SVG/picture). Returns design with Y up, origin 0,0.
+function normalize(raw, naturalMmPerUnit) {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const p of raw) for (const [x, y] of p) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y); }
+  const w = maxX - minX, h = maxY - minY;
+  if (!(w > 0) && !(h > 0)) throw new Error("The design has no size.");
+  const tol = Math.max(w, h) * 5e-4;
+  const paths = raw.map(p => {
+    const pts = p.map(([x, y]) => [x - minX, maxY - y]);
+    const closed = Math.hypot(pts[0][0] - pts.at(-1)[0], pts[0][1] - pts.at(-1)[1]) <= tol;
+    if (closed) pts[pts.length - 1] = pts[0].slice();
+    return { pts, closed };
+  });
+  return { id: ++designSeq, paths, w: Math.max(w, 1e-9), h: Math.max(h, 1e-9), naturalMm: naturalMmPerUnit ? w * naturalMmPerUnit : null };
+}
+
+function polyArea(p) { let a = 0; for (let i = 0, j = p.length - 1; i < p.length; j = i++) a += (p[j][0] + p[i][0]) * (p[j][1] - p[i][1]); return a / 2; }
+
+function rdp(pts, eps) {
+  if (pts.length < 3) return pts;
+  const keep = new Uint8Array(pts.length); keep[0] = keep[pts.length - 1] = 1;
+  const stack = [[0, pts.length - 1]];
+  while (stack.length) {
+    const [a, b] = stack.pop();
+    const [ax, ay] = pts[a], [bx, by] = pts[b];
+    const dx = bx - ax, dy = by - ay, len = Math.hypot(dx, dy);
+    let idx = -1, max = eps;
+    for (let i = a + 1; i < b; i++) {
+      const [px, py] = pts[i];
+      const d = len < 1e-12 ? Math.hypot(px - ax, py - ay) : Math.abs(dy * px - dx * py + bx * ay - by * ax) / len;
+      if (d > max) { max = d; idx = i; }
+    }
+    if (idx >= 0) { keep[idx] = 1; stack.push([a, idx], [idx, b]); }
+  }
+  return pts.filter((_, i) => keep[i]);
+}
+
+// Marching squares: closed contours where field v crosses iso. Border cells must be <= iso.
+function traceIso(v, W, H, iso) {
+  const nb = new Map(), P = new Map();
+  const ep = id => {
+    if (P.has(id)) return;
+    const cell = id >> 1, x = cell % W, y = (cell - x) / W;
+    const x2 = (id & 1) ? x : x + 1, y2 = (id & 1) ? y + 1 : y;
+    const a = v[y * W + x], b = v[y2 * W + x2], t = (iso - a) / (b - a);
+    P.set(id, [x + (x2 - x) * t, y + (y2 - y) * t]);
+  };
+  const link = (e1, e2) => {
+    ep(e1); ep(e2);
+    let l = nb.get(e1); if (!l) nb.set(e1, l = []); l.push(e2);
+    l = nb.get(e2); if (!l) nb.set(e2, l = []); l.push(e1);
+  };
+  for (let y = 0; y < H - 1; y++) for (let x = 0; x < W - 1; x++) {
+    const i = y * W + x;
+    const idx = (v[i] > iso ? 8 : 0) | (v[i + 1] > iso ? 4 : 0) | (v[i + W + 1] > iso ? 2 : 0) | (v[i + W] > iso ? 1 : 0);
+    if (idx === 0 || idx === 15) continue;
+    const T = i * 2, R = (i + 1) * 2 + 1, B = (i + W) * 2, L = i * 2 + 1;
+    switch (idx) {
+      case 1: case 14: link(L, B); break;
+      case 2: case 13: link(B, R); break;
+      case 3: case 12: link(L, R); break;
+      case 4: case 11: link(T, R); break;
+      case 6: case 9:  link(T, B); break;
+      case 7: case 8:  link(L, T); break;
+      case 5:  link(T, R); link(L, B); break;
+      case 10: link(L, T); link(B, R); break;
+    }
+  }
+  const seen = new Set(), out = [];
+  for (const start of nb.keys()) {
+    if (seen.has(start)) continue;
+    const loop = []; let prev = -1, cur = start;
+    for (;;) {
+      seen.add(cur); loop.push(P.get(cur));
+      const n = nb.get(cur);
+      const nxt = n[0] !== prev ? n[0] : n[1];
+      if (nxt === undefined || nxt === start || seen.has(nxt)) break;
+      prev = cur; cur = nxt;
+    }
+    if (loop.length > 2) { loop.push(loop[0].slice()); out.push(loop); }
+  }
+  return out;
+}
+
+// Exact Euclidean distance transform (Felzenszwalb). feature[i]=1 -> distance 0.
+function edt(feature, W, H) {
+  const INF = 1e20, n = Math.max(W, H);
+  const f = new Float64Array(n), d = new Float64Array(n), vv = new Int32Array(n), z = new Float64Array(n + 1);
+  const out = new Float64Array(W * H);
+  for (let i = 0; i < W * H; i++) out[i] = feature[i] ? 0 : INF;
+  const pass = len => {
+    let k = 0; vv[0] = 0; z[0] = -Infinity; z[1] = Infinity;
+    for (let q = 1; q < len; q++) {
+      let s = ((f[q] + q * q) - (f[vv[k]] + vv[k] * vv[k])) / (2 * q - 2 * vv[k]);
+      while (s <= z[k]) { k--; s = ((f[q] + q * q) - (f[vv[k]] + vv[k] * vv[k])) / (2 * q - 2 * vv[k]); }
+      k++; vv[k] = q; z[k] = s; z[k + 1] = Infinity;
+    }
+    k = 0;
+    for (let q = 0; q < len; q++) { while (z[k + 1] < q) k++; d[q] = (q - vv[k]) ** 2 + f[vv[k]]; }
+  };
+  for (let x = 0; x < W; x++) { for (let y = 0; y < H; y++) f[y] = out[y * W + x]; pass(H); for (let y = 0; y < H; y++) out[y * W + x] = d[y]; }
+  for (let y = 0; y < H; y++) { for (let x = 0; x < W; x++) f[x] = out[y * W + x]; pass(W); for (let x = 0; x < W; x++) out[y * W + x] = Math.sqrt(d[x]); }
+  return out;
+}
+
+// Fill closed shapes (mm, Y up) into a bitmap so we can grow / shrink them.
+function rasterize(closed, margin, resWanted) {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const p of closed) for (const [x, y] of p.pts) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y); }
+  const w = maxX - minX + 2 * margin, h = maxY - minY + 2 * margin;
+  const res = resWanted || Math.min(20, Math.max(3, Math.sqrt(3.5e6 / (w * h))));   // pixels per mm
+  const W = Math.ceil(w * res) + 2, H = Math.ceil(h * res) + 2;
+  const x0 = minX - margin, y1 = maxY + margin;
+  const c = document.createElement("canvas"); c.width = W; c.height = H;
+  const g = c.getContext("2d", { willReadFrequently: true });
+  g.beginPath();
+  for (const p of closed) p.pts.forEach(([x, y], i) => { const px = (x - x0) * res, py = (y1 - y) * res; i ? g.lineTo(px, py) : g.moveTo(px, py); });
+  g.fillStyle = "#000"; g.fill("evenodd");
+  const data = g.getImageData(0, 0, W, H).data, inside = new Uint8Array(W * H);
+  for (let i = 0; i < W * H; i++) inside[i] = data[i * 4 + 3] > 127 ? 1 : 0;
+  for (let x = 0; x < W; x++) { inside[x] = 0; inside[(H - 1) * W + x] = 0; }
+  for (let y = 0; y < H; y++) { inside[y * W] = 0; inside[y * W + W - 1] = 0; }
+  const toMm = ([px, py]) => [x0 + (px + 0.5) / res, y1 - (py + 0.5) / res];
+  return { inside, W, H, res, toMm, x0, y1 };
+}
+
+// ================= Pencil drawings (photos of sketches) =================
+function boxBlur(src, W, H, r) {
+  const tmp = new Float32Array(W * H), out = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) {
+    let s = 0, row = y * W;
+    for (let x = -r; x <= r; x++) s += src[row + Math.min(W - 1, Math.max(0, x))];
+    for (let x = 0; x < W; x++) {
+      tmp[row + x] = s / (2 * r + 1);
+      s += src[row + Math.min(W - 1, x + r + 1)] - src[row + Math.max(0, x - r)];
+    }
+  }
+  for (let x = 0; x < W; x++) {
+    let s = 0;
+    for (let y = -r; y <= r; y++) s += tmp[Math.min(H - 1, Math.max(0, y)) * W + x];
+    for (let y = 0; y < H; y++) {
+      out[y * W + x] = s / (2 * r + 1);
+      s += tmp[Math.min(H - 1, y + r + 1) * W + x] - tmp[Math.max(0, y - r) * W + x];
+    }
+  }
+  return out;
+}
+// separable max (or min) filter with a square window
+function rankFilter(src, W, H, r, isMax) {
+  const tmp = new Float32Array(W * H), out = new Float32Array(W * H);
+  const pick = isMax ? Math.max : Math.min;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    let m = src[y * W + x];
+    for (let k = Math.max(0, x - r); k <= Math.min(W - 1, x + r); k++) m = pick(m, src[y * W + k]);
+    tmp[y * W + x] = m;
+  }
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    let m = tmp[y * W + x];
+    for (let k = Math.max(0, y - r); k <= Math.min(H - 1, y + r); k++) m = pick(m, tmp[k * W + x]);
+    out[y * W + x] = m;
+  }
+  return out;
+}
+
+// Greyscale photo -> "how much darker than the paper around it" (0..1), lighting evened out
+function pencilDarkness(gray, W, H) {
+  const scale = Math.max(W, H) / 1400;
+  let bg = rankFilter(gray, W, H, Math.max(2, Math.round(6 * scale)), true);   // remove the lines
+  const br = Math.max(4, Math.round(25 * scale));
+  bg = boxBlur(boxBlur(bg, W, H, br), W, H, br);                                // smooth paper brightness
+  const d = new Float32Array(W * H);
+  for (let i = 0; i < d.length; i++) d[i] = Math.max(0, 1 - gray[i] / Math.max(bg[i], 1e-3));
+  return boxBlur(d, W, H, Math.max(1, Math.round(1.5 * scale)));   // smooth rough pencil strokes
+}
+
+// label 8-connected regions; drop ones touching the edge (page edge, shadows) or tiny ones
+function cleanMask(mask, W, H, minPx, dropBorder) {
+  const lab = new Int32Array(W * H), out = new Uint8Array(W * H), stack = [];
+  let id = 0;
+  for (let s = 0; s < W * H; s++) {
+    if (!mask[s] || lab[s]) continue;
+    id++; const pix = []; let border = false;
+    stack.push(s); lab[s] = id;
+    while (stack.length) {
+      const i = stack.pop(); pix.push(i);
+      const x = i % W, y = (i - x) / W;
+      if (x === 0 || y === 0 || x === W - 1 || y === H - 1) border = true;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+        const j = ny * W + nx;
+        if (mask[j] && !lab[j]) { lab[j] = id; stack.push(j); }
+      }
+    }
+    if (pix.length >= minPx && !(dropBorder && border)) for (const i of pix) out[i] = 1;
+  }
+  return out;
+}
+
+// Zhang-Suen thinning: shrink strokes to 1-pixel-wide centre lines
+function thin(mask, W, H) {
+  const m = Uint8Array.from(mask);
+  for (let x = 0; x < W; x++) { m[x] = 0; m[(H - 1) * W + x] = 0; }
+  for (let y = 0; y < H; y++) { m[y * W] = 0; m[y * W + W - 1] = 0; }
+  let cand = []; for (let i = 0; i < m.length; i++) if (m[i]) cand.push(i);
+  const del = [];
+  for (let changed = true, it = 0; changed && it < 200; it++) {
+    changed = false;
+    for (let step = 0; step < 2; step++) {
+      del.length = 0;
+      for (const i of cand) {
+        if (!m[i]) continue;
+        const p2 = m[i - W], p3 = m[i - W + 1], p4 = m[i + 1], p5 = m[i + W + 1], p6 = m[i + W], p7 = m[i + W - 1], p8 = m[i - 1], p9 = m[i - W - 1];
+        const B = p2 + p3 + p4 + p5 + p6 + p7 + p8 + p9;
+        if (B < 2 || B > 6) continue;
+        const A = (!p2 && p3) + (!p3 && p4) + (!p4 && p5) + (!p5 && p6) + (!p6 && p7) + (!p7 && p8) + (!p8 && p9) + (!p9 && p2);
+        if (A !== 1) continue;
+        if (step === 0 ? (p2 * p4 * p6 || p4 * p6 * p8) : (p2 * p4 * p8 || p2 * p6 * p8)) continue;
+        del.push(i);
+      }
+      for (const i of del) m[i] = 0;
+      if (del.length) changed = true;
+    }
+    cand = cand.filter(i => m[i]);
+  }
+  return m;
+}
+
+// 1-pixel skeleton -> list of polylines (pixel coords)
+function skeletonPaths(sk, W, H, minLen) {
+  const RING = [-W, -W + 1, 1, W + 1, W, W - 1, -1, -W - 1];          // clockwise round a pixel
+  const ORDER = [-W, 1, W, -1, -W + 1, W + 1, W - 1, -W - 1];          // straight neighbours first
+  const node = new Uint8Array(W * H);
+  for (let i = 0; i < sk.length; i++) if (sk[i]) {
+    let a = 0; for (let k = 0; k < 8; k++) if (!sk[i + RING[k]] && sk[i + RING[(k + 1) & 7]]) a++;
+    node[i] = a !== 2 ? (a === 1 ? 1 : 2) : 0;                         // 1 = line end, 2 = junction
+  }
+  const used = new Uint8Array(W * H), paths = [];
+  const pt = i => [i % W, Math.floor(i / W)];
+  const walk = (start, first) => {
+    const line = [start]; let prev = start, cur = first;
+    for (;;) {
+      line.push(cur);
+      if (node[cur]) break;
+      used[cur] = 1;
+      let nxt = -1;
+      for (const o of ORDER) {
+        const j = cur + o;
+        if (!sk[j] || j === prev) continue;
+        if (j === start) { if (line.length > 3) { nxt = j; break; } continue; }
+        if (node[j]) { nxt = j; break; }
+        if (!used[j] && nxt < 0) nxt = j;
+      }
+      if (nxt < 0) break;
+      prev = cur; cur = nxt;
+      if (cur === start) { line.push(cur); break; }
+    }
+    return line;
+  };
+  for (let i = 0; i < sk.length; i++) {
+    if (!node[i]) continue;
+    for (const o of ORDER) { const j = i + o; if (sk[j] && !node[j] && !used[j]) paths.push(walk(i, j)); }
+  }
+  for (let i = 0; i < sk.length; i++) {                                // loops with no ends or junctions
+    if (!sk[i] || used[i] || node[i]) continue;
+    used[i] = 1;
+    const j = ORDER.map(o => i + o).find(j => sk[j] && !used[j]);
+    if (j !== undefined) paths.push(walk(i, j));
+  }
+  const len = p => { let s = 0; for (let k = 1; k < p.length; k++) s += Math.hypot(p[k][0] - p[k - 1][0], p[k][1] - p[k - 1][1]); return s; };
+  // drop short dead-end twigs and specks, but keep short pieces that join two lines
+  const keep = p => len(p.map(pt)) >= minLen || (node[p[0]] === 2 && node[p.at(-1)] === 2);
+  return paths.filter(keep).map(p => p.map(pt)).map(p => {
+    if (p.length < 5) return p;                                       // smooth the pixel staircase
+    return p.map((v, k) => k === 0 || k === p.length - 1 ? v : [(p[k - 1][0] + 2 * v[0] + p[k + 1][0]) / 4, (p[k - 1][1] + 2 * v[1] + p[k + 1][1]) / 4]);
+  });
+}
+
+// Fill in the outline to get a solid silhouette (for cutting the shape out)
+function silhouette(mask, W, H, closeR) {
+  const f = new Float32Array(W * H); for (let i = 0; i < f.length; i++) f[i] = mask[i];
+  const grown = rankFilter(f, W, H, closeR, true);
+  const outside = new Uint8Array(W * H), stack = [];
+  for (let x = 0; x < W; x++) stack.push(x, (H - 1) * W + x);
+  for (let y = 0; y < H; y++) stack.push(y * W, y * W + W - 1);
+  while (stack.length) {
+    const i = stack.pop(); if (outside[i] || grown[i] > 0.5) continue;
+    outside[i] = 1; const x = i % W;
+    if (x > 0) stack.push(i - 1); if (x < W - 1) stack.push(i + 1);
+    if (i >= W) stack.push(i - W); if (i < W * (H - 1)) stack.push(i + W);
+  }
+  const solid = new Float32Array(W * H); for (let i = 0; i < W * H; i++) solid[i] = outside[i] ? 0 : 1;
+  const shrunk = rankFilter(solid, W, H, closeR, false);      // undo the growing
+  return shrunk;
+}
+
+function grayOf(img, maxDim) {
+  const s = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
+  const W = Math.round(img.naturalWidth * s), H = Math.round(img.naturalHeight * s);
+  const c = document.createElement("canvas"); c.width = W; c.height = H;
+  const g = c.getContext("2d", { willReadFrequently: true }); g.fillStyle = "#fff"; g.fillRect(0, 0, W, H); g.drawImage(img, 0, 0, W, H);
+  const d = g.getImageData(0, 0, W, H).data, gray = new Float32Array(W * H);
+  for (let i = 0; i < W * H; i++) gray[i] = (0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2]) / 255;
+  return { gray, W, H };
+}
+
+// fill small gaps inside strokes/shading (stops little bubbles in the centre lines)
+function fillHoles(mask, W, H, maxHole) {
+  const inv = new Uint8Array(W * H); for (let i = 0; i < inv.length; i++) inv[i] = 1 - mask[i];
+  const big = cleanMask(inv, W, H, maxHole, false);            // background areas we keep
+  const out = new Uint8Array(W * H);
+  // a background area survives if it is big or touches the edge
+  const edgeBg = cleanMask(inv, W, H, 1, false);
+  const lab = new Uint8Array(W * H), stack = [];
+  for (let x = 0; x < W; x++) stack.push(x, (H - 1) * W + x);
+  for (let y = 0; y < H; y++) stack.push(y * W, y * W + W - 1);
+  while (stack.length) {
+    const i = stack.pop(); if (lab[i] || !inv[i]) continue; lab[i] = 1; const x = i % W;
+    if (x > 0) stack.push(i - 1); if (x < W - 1) stack.push(i + 1); if (i >= W) stack.push(i - W); if (i < W * (H - 1)) stack.push(i + W);
+  }
+  for (let i = 0; i < out.length; i++) out[i] = (big[i] || lab[i]) ? 0 : 1;
+  return out;
+}
+
+// ================= Loading designs =================
+$("openBtn").onclick = () => $("fileIn").click();
+$("fileIn").onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  busy(true); await nextFrame();
+  try {
+    if (/svg/i.test(f.type) || /\.svg$/i.test(f.name)) {
+      setDesign(loadSvgText(await f.text()), f.name);
+      $("imgOpts").hidden = true;
+    } else {
+      const img = await loadImage(f);
+      $("imgOpts").hidden = false;
+      $("width").value = 150;
+      processImage({ type: "image", img }, f.name, true);
+    }
+  } catch (err) { alert("Sorry, that design couldn't be read.\n\n" + err.message); }
+  busy(false); e.target.value = "";
+};
+
+function setDesign(d, name) {
+  design = d; design.name = name;
+  if (d.naturalMm) $("width").value = Math.round(Math.min(380, Math.max(10, d.naturalMm)));
+  $("fileName").textContent = `${name} – ${d.paths.length} shape${d.paths.length === 1 ? "" : "s"}`;
+  refresh();
+}
+
+function loadSvgText(text) {
+  const doc = new DOMParser().parseFromString(text, "image/svg+xml");
+  const root = doc.documentElement;
+  if (doc.querySelector("parsererror") || root.nodeName.toLowerCase() !== "svg") throw new Error("It isn't a valid SVG file.");
+  root.querySelectorAll("script, foreignObject, image").forEach(n => n.remove());
+  for (const el of [root, ...root.querySelectorAll("*")])
+    for (const a of [...el.attributes]) if (/^on/i.test(a.name)) el.removeAttribute(a.name);
+
+  const host = $("hiddenSvg"); host.innerHTML = "";
+  const svg = document.importNode(root, true); host.appendChild(svg);
+  const shapes = [...svg.querySelectorAll("path, line, polyline, polygon, rect, circle, ellipse")]
+    .filter(s => !s.closest("defs, clipPath, mask, symbol, marker, pattern"));
+  const raw = [];
+  let textCount = svg.querySelectorAll("text").length;
+  for (const sh of shapes) {
+    let L; try { L = sh.getTotalLength(); } catch { continue; }
+    if (!(L > 0)) continue;
+    const bb = sh.getBBox();
+    const step = Math.max(L / 20000, Math.hypot(bb.width, bb.height) / 2000, 1e-6);
+    const m = sh.getCTM() || new DOMMatrix();
+    const P = t => { const p = sh.getPointAtLength(Math.min(L, Math.max(0, t))); return [p.x, p.y]; };
+    const isJump = (a, b, pa, pb) => Math.hypot(pb[0] - pa[0], pb[1] - pa[1]) > (b - a) * 1.5 + 1e-9;
+    const mine = [];
+    let cur = [P(0)], prevT = 0, prevP = cur[0];
+    const n = Math.max(2, Math.ceil(L / step));
+    for (let i = 1; i <= n; i++) {
+      const t = L * i / n, p = P(t);
+      if (isJump(prevT, t, prevP, p)) {           // a new sub-path starts here: find exactly where
+        let lo = prevT, hi = t, plo = prevP;
+        for (let k = 0; k < 40; k++) { const mid = (lo + hi) / 2, pm = P(mid); if (isJump(lo, mid, plo, pm)) hi = mid; else { lo = mid; plo = pm; } }
+        cur.push(plo); if (cur.length > 1) mine.push(cur); cur = [P(hi)];
+      }
+      cur.push(p); prevT = t; prevP = p;
+    }
+    if (cur.length > 1) mine.push(cur);
+    for (const p of mine) raw.push(p.map(([x, y]) => { const q = new DOMPoint(x, y).matrixTransform(m); return [q.x, q.y]; }));
+  }
+  host.innerHTML = "";
+  if (!raw.length) throw new Error(textCount
+    ? "The file only has text in it. Use the 'Type some text' tab instead, or in Inkscape use Path → Object to Path."
+    : "No lines or shapes were found in it.");
+  return normalize(raw, 25.4 / 96);                  // SVG units are CSS pixels (96 per inch)
+}
+
+function loadImage(file) {
+  return new Promise((res, rej) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => { URL.revokeObjectURL(url); res(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error("That picture couldn't be opened.")); };
+    img.src = url;
+  });
+}
+
+// Turn a picture (or rendered text) into outlines of its dark areas.
+function traceCanvas(c, iso, invert, minArea) {
+  const W = c.width, H = c.height, data = c.getContext("2d").getImageData(0, 0, W, H).data;
+  const v = new Float32Array(W * H);
+  for (let i = 0; i < W * H; i++) {
+    const a = data[i * 4 + 3] / 255;
+    const lum = (0.299 * data[i * 4] + 0.587 * data[i * 4 + 1] + 0.114 * data[i * 4 + 2]) / 255 * a + (1 - a);
+    v[i] = invert ? lum : 1 - lum;  // "darkness"
+  }
+  for (let x = 0; x < W; x++) { v[x] = 0; v[(H - 1) * W + x] = 0; }
+  for (let y = 0; y < H; y++) { v[y * W] = 0; v[y * W + W - 1] = 0; }
+  const loops = traceIso(v, W, H, iso).filter(l => Math.abs(polyArea(l)) >= minArea);
+  if (!loops.length) throw new Error("Nothing dark enough was found. Try moving the 'what counts as dark' slider, or tick 'Swap light and dark'.");
+  return loops;
+}
+
+function processImage(src, name, firstTime) {
+  const kind = $("imgKind").value;
+  $("detailRow").hidden = kind === "logo"; $("threshRow").hidden = $("invertRow").hidden = kind !== "logo";
+  const d = kind === "logo" ? traceImage(src.img) : traceSketch(src, kind);
+  d.source = src; setDesign(d, name);
+  if (firstTime) {
+    if (kind === "lines") { document.querySelector("input[value=engrave]").click(); $("bit").value = "vbit"; applyPreset(); }
+    else if (kind === "relief") document.querySelector("input[value=relief]").click();
+    else if (kind === "shape") { document.querySelector("input[value=cut]").click(); if (BITS[$("bit").value].vbit) { $("bit").value = "flat3"; applyPreset(); } }
+    else if (mode() === "engrave") document.querySelector("input[value=pocket]").click();
+  }
+}
+
+function traceSketch(src, kind) {
+  if (!src.pd) { const { gray, W, H } = grayOf(src.img, 1400); src.pd = { d: pencilDarkness(gray, W, H), W, H }; }
+  const { d, W, H } = src.pd;
+  const T = 0.45 - (+$("detail").value) * 0.04;
+  const raw = new Uint8Array(W * H); for (let i = 0; i < raw.length; i++) raw[i] = d[i] > T ? 1 : 0;
+  const mask = cleanMask(raw, W, H, Math.round(W * H / 20000), true);   // drops specks, page edges, shadows
+  if (kind === "lines") {
+    const paths = skeletonPaths(thin(fillHoles(mask, W, H, Math.round(W * H / 5000)), W, H), W, H, 12);
+    if (!paths.length) throw new Error("No pencil lines were found. Move the 'Pencil to pick up' slider towards 'more'.");
+    return normalize(paths, null);
+  }
+  const f = boxBlur(silhouette(mask, W, H, Math.max(3, Math.round(6 * W / 1400))), W, H, 2);
+  const silOnly = f;
+  for (let x = 0; x < W; x++) { f[x] = 0; f[(H - 1) * W + x] = 0; }
+  for (let y = 0; y < H; y++) { f[y * W] = 0; f[y * W + W - 1] = 0; }
+  let loops = traceIso(f, W, H, 0.5);
+  const biggest = Math.max(0, ...loops.map(l => Math.abs(polyArea(l))));
+  loops = loops.filter(l => Math.abs(polyArea(l)) >= Math.max(W * H / 3000, biggest * 0.15));   // main shape only, not the signature
+  if (!loops.length) throw new Error("No shape was found. Move the 'Pencil to pick up' slider towards 'more'.");
+  if (kind === "relief") {
+    // the shape plus its inner pencil lines (not the ones along the outline, which the rounded edge already shows)
+    const outside = new Uint8Array(W * H); for (let i = 0; i < outside.length; i++) outside[i] = silOnly[i] > 0.5 ? 0 : 1;
+    const toEdge = edt(outside, W, H), edgeGap = Math.max(6, 9 * W / 1400);
+    const lines = skeletonPaths(thin(fillHoles(mask, W, H, Math.round(W * H / 5000)), W, H), W, H, 16)
+      .filter(p => { let near = 0, out = 0; for (const [x, y] of p) { const v = toEdge[Math.round(y) * W + Math.round(x)]; if (v < edgeGap) near++; if (v === 0) out++; } return near / p.length < 0.6 && out / p.length < 0.5; });
+    return normalize([...loops, ...lines], null);
+  }
+  return normalize(loops, null);
+}
+
+function traceImage(img) {
+  const scale = Math.min(1, 1500 / Math.max(img.naturalWidth, img.naturalHeight));
+  const c = document.createElement("canvas");
+  c.width = Math.max(4, Math.round(img.naturalWidth * scale)); c.height = Math.max(4, Math.round(img.naturalHeight * scale));
+  const g = c.getContext("2d", { willReadFrequently: true });
+  g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
+  const d = normalize(traceCanvas(c, +$("thresh").value, $("invert").checked, 12), null);
+  return d;
+}
+
+let lastImage = null;
+async function retraceImage(e) {
+  const src = (design && design.source) || lastImage; if (!src) return;
+  lastImage = src;
+  busy(true); await nextFrame();
+  try { processImage(src, design ? design.name : "picture", e && e.target.id === "imgKind"); }
+  catch (err) { $("fileName").textContent = err.message; }
+  busy(false);
+}
+["thresh", "invert", "detail", "imgKind"].forEach(id => $(id).addEventListener("change", retraceImage));
+
+function makeTextDesign() {
+  const text = $("textIn").value.replace(/\s+$/, "");
+  if (!text.trim()) return alert("Type some text first.");
+  const font = `${$("boldIn").checked ? "bold " : ""}200px "${$("fontSel").value}", Arial, sans-serif`;
+  const lines = text.split("\n");
+  const c = document.createElement("canvas"), g = c.getContext("2d", { willReadFrequently: true });
+  g.font = font;
+  const widths = lines.map(l => g.measureText(l).width), lh = 240;
+  c.width = Math.ceil(Math.max(...widths)) + 80; c.height = lines.length * lh + 80;
+  g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height);
+  g.font = font; g.fillStyle = "#000"; g.textBaseline = "top"; g.textAlign = "center";
+  lines.forEach((l, i) => g.fillText(l, c.width / 2, 40 + i * lh));
+  try {
+    const d = normalize(traceCanvas(c, 0.5, false, 4), 40 / 200);   // 200px letters ≈ 40mm
+    setDesign(d, `"${text.replace(/\n/g, " / ")}" in ${$("fontSel").value}`);
+    if (mode() === "engrave") document.querySelector("input[value=pocket]").click();
+  } catch (err) { alert(err.message); }
+}
+$("useTextBtn").onclick = async () => { busy(true); await nextFrame(); makeTextDesign(); busy(false); };
+
+// ================= Toolpaths =================
+function placedPaths() {
+  if (!design) return [];
+  const s = (+$("width").value || 1) / design.w, ox = +$("offX").value || 0, oy = +$("offY").value || 0;
+  return design.paths.map(p => ({ closed: p.closed, pts: rdp(p.pts.map(([x, y]) => [ox + x * s, oy + y * s]), 0.02) }))
+                     .filter(p => p.pts.length > 1);
+}
+
+let tpCache = { key: null, val: null };
+function toolpaths() {
+  const S = settings(), placed = placedPaths();
+  const key = JSON.stringify([design && design.id, $("width").value, $("offX").value, $("offY").value, S.mode, $("bit").value, $("exact").checked]);
+  if (tpCache.key === key) return tpCache.val;
+  const r = BITS[$("bit").value].dia / 2;
+  let val = { paths: placed, note: "" };
+  const closed = placed.filter(p => p.closed), open = placed.filter(p => !p.closed);
+  if (S.mode === "cut" && $("exact").checked && closed.length) {
+    const R = rasterize(closed, r + 2);
+    const dist = edt(R.inside, R.W, R.H);                 // distance to the shape
+    const lim = r * R.res + 0.5, v = new Float32Array(R.W * R.H);
+    for (let i = 0; i < v.length; i++) v[i] = lim - dist[i];
+    const outer = traceIso(v, R.W, R.H, 0).map(l => ({ closed: true, pts: rdp(l.map(R.toMm), 0.02) }));
+    val = { paths: [...outer, ...open], note: "" };
+  } else if (S.mode === "pocket") {
+    if (!closed.length) val = { paths: placed, note: "There are no closed shapes to carve out, so it will engrave the lines instead." };
+    else {
+      const R = rasterize(closed, 2);
+      const notInside = new Uint8Array(R.inside.length); for (let i = 0; i < notInside.length; i++) notInside[i] = 1 - R.inside[i];
+      const dist = edt(notInside, R.W, R.H);              // distance to the edge, inside the shape
+      const stepover = BITS[$("bit").value].dia * 0.4, v = new Float32Array(R.W * R.H), rings = [];
+      for (let k = 0; k < 600; k++) {
+        const lim = (r + k * stepover) * R.res + 0.5;
+        for (let i = 0; i < v.length; i++) v[i] = dist[i] - lim;
+        const loops = traceIso(v, R.W, R.H, 0);
+        if (!loops.length) break;
+        for (const l of loops) rings.push({ closed: true, pts: rdp(l.map(R.toMm), 0.02) });
+      }
+      // find parts narrower than the bit, which it can't reach
+      const lim0 = r * R.res + 0.5, reach = new Uint8Array(dist.length);
+      for (let i = 0; i < dist.length; i++) reach[i] = dist[i] > lim0 ? 1 : 0;
+      const dReach = edt(reach, R.W, R.H);
+      let inside = 0, missed = 0;
+      for (let i = 0; i < dist.length; i++) if (R.inside[i]) { inside++; if (dReach[i] > lim0 + 1.5) missed++; }
+      const pct = inside ? Math.round(missed / inside * 100) : 0;
+      val = { paths: [...rings, ...open], note: !rings.length
+        ? "The shapes are thinner than the bit, so nothing can be carved out. Make the design bigger, pick a smaller bit, or use Engrave."
+        : pct >= 3 ? `About ${pct}% of the design is narrower than the bit and won't be carved. Make it bigger or pick a smaller bit.` : "" };
+    }
+  }
+  tpCache = { key, val };
+  return val;
+}
+
+function orderPaths(paths) {
+  const left = paths.slice(), out = [];
+  let at = [0, 0];
+  const d2 = (a, b) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2;
+  while (left.length) {
+    let best = 0, bestD = Infinity, how = null;
+    left.forEach((p, i) => {
+      if (p.closed) {
+        const stride = Math.max(1, Math.floor(p.pts.length / 200));
+        for (let j = 0; j < p.pts.length - 1; j += stride) { const d = d2(at, p.pts[j]); if (d < bestD) { bestD = d; best = i; how = { rot: j }; } }
+      } else {
+        const a = d2(at, p.pts[0]), b = d2(at, p.pts.at(-1));
+        if (a < bestD) { bestD = a; best = i; how = { rev: false }; }
+        if (b < bestD) { bestD = b; best = i; how = { rev: true }; }
+      }
+    });
+    const p = left.splice(best, 1)[0];
+    let pts = p.pts;
+    if (p.closed) { const ring = pts.slice(0, -1); pts = [...ring.slice(how.rot), ...ring.slice(0, how.rot)]; pts.push(pts[0]); }
+    else if (how.rev) pts = pts.slice().reverse();
+    out.push({ closed: p.closed, pts });
+    at = pts.at(-1);
+  }
+  return out;
+}
+
+function settings() {
+  const m = mode(), thick = +$("thick").value || 0;
+  return {
+    mode: m, cut: m === "cut",
+    total: m === "relief" ? Math.max(0.5, +$("rH").value || 4) : m === "cut" ? ($("skin").checked ? Math.max(0.1, thick - SKIN) : thick + 0.2) : (+$("depth").value || 0),
+    feed: Math.max(10, +$("feed").value || 0),
+    plunge: Math.max(10, +$("plunge").value || 0),
+    step: Math.max(0.05, +$("stepdown").value || 0),
+    spindle: Math.max(0, +$("spindle").value || 0),
+    safe: Math.max(1, +$("safe").value || 5),
+    air: $("airRun").checked,
+    reliefH: Math.max(0.5, +$("rH").value || 4), round: Math.max(0, +$("rRound").value || 0),
+    border: Math.max(3, +$("rBorder").value || 8), lines: $("rLines").checked,
+    lineD: Math.max(0, +$("rLineD").value || 0), finish: +$("rFinish").value || 0.12,
+  };
+}
+
+const fmt = v => { const s = (+v).toFixed(3).replace(/\.?0+$/, ""); return s === "-0" ? "0" : s; };
+
+// ================= 3D raised carving (relief) =================
+let reliefCache = { key: null, val: null };
+function reliefModel(S) {
+  const placed = placedPaths(), bit = BITS[$("bit").value], r = bit.dia / 2;
+  const key = JSON.stringify([design && design.id, $("width").value, $("offX").value, $("offY").value, $("bit").value,
+                              S.reliefH, S.round, S.border, S.lines, S.lineD, S.finish, S.step]);
+  if (reliefCache.key === key) return reliefCache.val;
+  const closed = placed.filter(p => p.closed), open = placed.filter(p => !p.closed);
+  if (!closed.length) {
+    const val = { note: "3D raised carving needs a closed outline. For a drawing, choose 'a drawing – 3D raised carving' when opening it.", rows: [] };
+    reliefCache = { key, val }; return val;
+  }
+  let bx0 = Infinity, by0 = Infinity, bx1 = -Infinity, by1 = -Infinity;
+  for (const p of closed) for (const [x, y] of p.pts) { bx0 = Math.min(bx0, x); bx1 = Math.max(bx1, x); by0 = Math.min(by0, y); by1 = Math.max(by1, y); }
+  const B = S.border, D = S.reliefH;
+  const res = Math.min(8, Math.max(2, Math.sqrt(2.2e6 / ((bx1 - bx0 + 2 * B + 2 * r) * (by1 - by0 + 2 * B + 2 * r)))));
+  const R = rasterize(closed, B + r + 1, res), W = R.W, H = R.H;
+  // height of the finished surface: background at -D, shape domed up towards the top of the wood
+  const notIn = new Uint8Array(W * H); for (let i = 0; i < notIn.length; i++) notIn[i] = 1 - R.inside[i];
+  const dIn = edt(notIn, W, H), surf = new Float32Array(W * H), Rpx = Math.max(1e-6, S.round * res);
+  for (let i = 0; i < surf.length; i++) {
+    if (!R.inside[i]) { surf[i] = -D; continue; }
+    const t = S.round > 0 ? Math.min(1, (dIn[i] - 0.5) / Rpx) : 1;
+    surf[i] = -D + D * Math.sqrt(Math.max(0, 1 - (1 - t) * (1 - t)));
+  }
+  // carve the drawing's lines into the surface as V grooves
+  if (S.lines && open.length && S.lineD > 0) {
+    const c = document.createElement("canvas"); c.width = W; c.height = H;
+    const g = c.getContext("2d", { willReadFrequently: true });
+    g.strokeStyle = "#000"; g.lineWidth = 1.5; g.lineCap = g.lineJoin = "round";
+    for (const p of open) { g.beginPath(); p.pts.forEach(([x, y], i) => { const px = (x - R.x0) * res, py = (R.y1 - y) * res; i ? g.lineTo(px, py) : g.moveTo(px, py); }); g.stroke(); }
+    const dat = g.getImageData(0, 0, W, H).data, onLine = new Uint8Array(W * H);
+    for (let i = 0; i < onLine.length; i++) onLine[i] = dat[i * 4 + 3] > 60 ? 1 : 0;
+    const dL = edt(onLine, W, H), half = Math.max(S.lineD, 0.6) * res;
+    for (let i = 0; i < surf.length; i++) if (R.inside[i] && dL[i] < half) surf[i] = Math.max(-D, surf[i] - S.lineD * (1 - dL[i] / half));
+  }
+  // where the tip of a ball-nose bit has to be so it touches the surface but never cuts into it
+  const rp = r * res, kr = Math.ceil(rp), step = Math.max(1, Math.round(rp / 6)), ker = [];
+  for (let dy = -kr; dy <= kr; dy += step) for (let dx = -kr; dx <= kr; dx += step) {
+    const dd = Math.hypot(dx, dy) / res; if (dd > r) continue;
+    ker.push([dx, dy, r - Math.sqrt(r * r - dd * dd)]);
+  }
+  ker.push([1, 0, r - Math.sqrt(Math.max(0, r * r - 1 / (res * res)))], [-1, 0, r - Math.sqrt(Math.max(0, r * r - 1 / (res * res)))]);
+  const tip = (ix, iy) => {
+    let z = -D;
+    for (const [dx, dy, off] of ker) {
+      const x = ix + dx, y = iy + dy;
+      if (x < 0 || y < 0 || x >= W || y >= H) continue;
+      const v = surf[y * W + x] - off; if (v > z) z = v;
+    }
+    return Math.min(0, z);
+  };
+  const toPx = (x, y) => [Math.round((x - R.x0) * res - 0.5), Math.round((R.y1 - y) * res - 0.5)];
+  const ax0 = bx0 - B, ax1 = bx1 + B, ay0 = by0 - B, ay1 = by1 + B;
+  const rowsFor = stepover => {
+    const rows = [], n = Math.max(1, Math.ceil((ay1 - ay0) / stepover));
+    for (let k = 0; k <= n; k++) {
+      const y = ay0 + (ay1 - ay0) * k / n, iy = toPx(0, y)[1], [ixa] = toPx(ax0, y), [ixb] = toPx(ax1, y);
+      const pts = [];
+      for (let ix = ixa; ix <= ixb; ix++) pts.push([R.x0 + (ix + 0.5) / res, tip(ix, iy)]);
+      rows.push({ y, pts });
+    }
+    return rows;
+  };
+  const finish = rowsFor(Math.max(0.05, bit.dia * S.finish));
+  const rough = [];
+  const levels = Math.ceil(D / S.step - 1e-9) - 1;              // finishing pass takes the last layer
+  if (levels > 0) {
+    const coarse = rowsFor(bit.dia * 0.45);
+    for (let k = 1; k <= levels; k++) {
+      const lvl = -k * S.step;
+      rough.push(coarse.map(rw => ({ y: rw.y, pts: rw.pts.map(([x, z]) => [x, Math.max(lvl, Math.min(0, z + 0.3))]) })));
+    }
+  }
+  // shaded picture of the finished carving for the preview
+  const img = document.createElement("canvas"); img.width = W; img.height = H;
+  const ig = img.getContext("2d"), id = ig.createImageData(W, H);
+  const [qx0, qy0] = toPx(ax0 - r, ay1 + r), [qx1, qy1] = toPx(ax1 + r, ay0 - r);
+  for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+    const i = y * W + x; if (x < qx0 || x > qx1 || y < qy0 || y > qy1) continue;
+    const gx = (surf[i + 1] - surf[i - 1]) * res / 2, gy = (surf[i - W] - surf[i + W]) * res / 2;
+    const sh = Math.max(0, (-gx * -0.5 + -gy * 0.5 + 1) / Math.sqrt(gx * gx + gy * gy + 1) / 1.22);
+    const k = 0.35 + 0.65 * sh;
+    id.data[i * 4] = 214 * k; id.data[i * 4 + 1] = 170 * k; id.data[i * 4 + 2] = 118 * k; id.data[i * 4 + 3] = 255;
+  }
+  ig.putImageData(id, 0, 0);
+  const val = { rows: finish, rough, img, frame: { x0: R.x0, y1: R.y1, w: W / res, h: H / res },
+                rect: [[ax0, ay0], [ax1, ay0], [ax1, ay1], [ax0, ay1], [ax0, ay0]], note: "" };
+  reliefCache = { key, val };
+  return val;
+}
+
+// simplify one raster row (x, z) without changing its shape by more than tol
+function simplifyRow(pts, tol) { return rdp(pts, tol); }
+
+function makeReliefGcode(S) {
+  const M = reliefModel(S);
+  const lift = S.air ? S.reliefH + 3 : 0, Z = v => fmt(v + lift);
+  const g = [`(${APP} - 3D raised carving ${fmt(S.reliefH)} mm${S.air ? " - TEST RUN IN THE AIR" : ""})`,
+             "G21 G90 G17 G94", `G0 Z${Z(S.safe)}`, `M3 S${fmt(S.spindle)}`, "G4 P3"];
+  let len = 0;
+  const pass = rows => {
+    if (!rows.length) return;
+    rows.forEach((rw, k) => {
+      let pts = simplifyRow(rw.pts, 0.01);
+      if (k % 2) pts = pts.slice().reverse();                 // back and forth
+      const y = fmt(rw.y);
+      if (k === 0) { g.push(`G0 X${fmt(pts[0][0])} Y${y}`, `G0 Z${Z(0.5)}`, `G1 Z${Z(pts[0][1])} F${fmt(S.plunge)}`); }
+      else {
+        const prevZ = +g._lastZ, up = Math.max(prevZ, pts[0][1]);
+        g.push(`G1 Z${Z(up)} F${fmt(S.plunge)}`, `G1 Y${y}`, `G1 Z${Z(pts[0][1])}`);
+        len += Math.abs(rows[k].y - rows[k - 1].y);
+      }
+      for (let i = 1; i < pts.length; i++) {
+        g.push(`G1 X${fmt(pts[i][0])} Z${Z(pts[i][1])}` + (i === 1 ? ` F${fmt(S.feed)}` : ""));
+        len += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+      }
+      g._lastZ = pts.at(-1)[1];
+    });
+    g.push(`G0 Z${Z(S.safe)}`);
+  };
+  for (const lvl of M.rough) pass(lvl);
+  pass(M.rows);
+  g.push("M5", `G0 Z${Z(S.safe)}`, "G0 X0 Y0", "(done)");
+  const text = g.join("\n") + "\n";
+  const minutes = len / S.feed * 1.15 + 0.1;                   // +15% for slowing down on bumps
+  return { text, minutes, paths: M.rect ? [{ closed: true, pts: M.rect }] : [], passes: M.rough.length + 1, S, note: M.note, relief: M };
+}
+
+function makeGcode() {
+  if (mode() === "relief") return makeReliefGcode(settings());
+  const S = settings(), tp = toolpaths(), paths = orderPaths(tp.paths);
+  const dia = BITS[$("bit").value].dia;
+  const lift = S.air ? S.total + 3 : 0;        // test run: everything raised so the bit never touches
+  const Z = v => fmt(v + lift);
+  const passes = Math.max(1, Math.ceil(S.total / S.step - 1e-9));
+  const g = [
+    `(${APP} - ${S.mode} ${fmt(S.total)} mm deep${S.air ? " - TEST RUN IN THE AIR" : ""})`,
+    "G21 G90 G17 G94",
+    `G0 Z${Z(S.safe)}`,
+    `M3 S${fmt(S.spindle)}`,
+    "G4 P3",
+  ];
+  let cutLen = 0, travel = 0, at = [0, 0];
+  paths.forEach((p, idx) => {
+    let pts = p.pts.slice();
+    g.push(`G0 X${fmt(pts[0][0])} Y${fmt(pts[0][1])}`);
+    travel += Math.hypot(pts[0][0] - at[0], pts[0][1] - at[1]);
+    g.push(`G0 Z${Z(0.5)}`);
+    for (let k = 1; k <= passes; k++) {
+      if (k > 1 && !p.closed) pts = pts.reverse();   // open lines: go back and forth
+      g.push(`G1 Z${Z(-Math.min(S.total, k * S.step))} F${fmt(S.plunge)}`);
+      for (let i = 1; i < pts.length; i++) {
+        g.push(`G1 X${fmt(pts[i][0])} Y${fmt(pts[i][1])}` + (i === 1 ? ` F${fmt(S.feed)}` : ""));
+        cutLen += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+      }
+    }
+    at = pts.at(-1);
+    const next = paths[idx + 1];
+    const near = next && Math.hypot(next.pts[0][0] - at[0], next.pts[0][1] - at[1]) <= dia * 1.5;
+    g.push(`G0 Z${Z(near ? 1 : S.safe)}`);          // small hop when the next cut is right next door
+  });
+  g.push("M5", `G0 Z${Z(S.safe)}`, "G0 X0 Y0", "(done)");
+  const minutes = cutLen / S.feed + (paths.length * passes * S.total) / S.plunge + travel / 2000 + paths.length * 0.01 + 0.05;
+  return { text: g.join("\n") + "\n", minutes, paths, passes, S, note: tp.note };
+}
+
+// ================= Preview =================
+const cv = $("cv"), ctx = cv.getContext("2d");
+let machinePos = null, lastJob = null;
+
+function draw() {
+  const wrap = $("cvWrap"), dpr = window.devicePixelRatio || 1;
+  const W = wrap.clientWidth, H = wrap.clientHeight;
+  cv.width = W * dpr; cv.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  const paths = lastJob ? lastJob.paths : [], orig = design ? placedPaths() : [];
+  let maxX = BED.w, maxY = BED.h, minX = 0, minY = 0;
+  if ($("zoom").checked && paths.length) { minX = minY = Infinity; maxX = maxY = -Infinity; }
+  for (const p of paths) for (const [x, y] of p.pts) { maxX = Math.max(maxX, x); maxY = Math.max(maxY, y); minX = Math.min(minX, x); minY = Math.min(minY, y); }
+  if ($("zoom").checked && paths.length) { minX -= 5; minY -= 5; maxX += 5; maxY += 5; }
+  const pad = 30, sc = Math.min((W - 2 * pad) / (maxX - minX), (H - 2 * pad) / (maxY - minY));
+  const X = x => pad + (x - minX) * sc, Y = y => H - pad - (y - minY) * sc;
+  const stroke = (ps, style, width) => { ctx.strokeStyle = style; ctx.lineWidth = width;
+    for (const p of ps) { ctx.beginPath(); p.pts.forEach(([x, y], i) => i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y))); ctx.stroke(); } };
+
+  ctx.strokeStyle = "#eee"; ctx.lineWidth = 1;
+  for (let x = 0; x <= BED.w; x += 10) { ctx.beginPath(); ctx.moveTo(X(x), Y(0)); ctx.lineTo(X(x), Y(BED.h)); ctx.stroke(); }
+  for (let y = 0; y <= BED.h; y += 10) { ctx.beginPath(); ctx.moveTo(X(0), Y(y)); ctx.lineTo(X(BED.w), Y(y)); ctx.stroke(); }
+  ctx.strokeStyle = "#bbb"; ctx.lineWidth = 2; ctx.strokeRect(X(0), Y(BED.h), BED.w * sc, BED.h * sc);
+  ctx.fillStyle = "#999"; ctx.font = "13px system-ui";
+  ctx.fillText("Back of machine", X(BED.w / 2) - 50, Y(BED.h) - 8);
+  ctx.fillText("Front (you)", X(BED.w / 2) - 35, Y(0) + 20);
+
+  ctx.lineCap = ctx.lineJoin = "round";
+  if (lastJob && lastJob.relief && lastJob.relief.img) {
+    const f = lastJob.relief.frame;
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(lastJob.relief.img, X(f.x0), Y(f.y1), f.w * sc, f.h * sc);
+    stroke(paths, "#1f6feb", 1.2);
+  } else {
+    stroke(paths, "rgba(31,111,235,.22)", Math.max(1.5, BITS[$("bit").value].dia * sc));
+    stroke(paths, "#1f6feb", 1.2);
+    if (mode() !== "engrave") stroke(orig, "#888", 1);
+  }
+
+  ctx.fillStyle = "#cf222e"; ctx.beginPath(); ctx.arc(X(0), Y(0), 6, 0, 7); ctx.fill();
+  ctx.fillText("Start corner", X(0) + 10, Y(0) - 8);
+  if (machinePos) {
+    const [mx, my] = machinePos;
+    ctx.strokeStyle = "#1a7f37"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(X(mx), Y(my), 8, 0, 7); ctx.moveTo(X(mx) - 14, Y(my)); ctx.lineTo(X(mx) + 14, Y(my));
+    ctx.moveTo(X(mx), Y(my) - 14); ctx.lineTo(X(mx), Y(my) + 14); ctx.stroke();
+  }
+  if (!design) { ctx.fillStyle = "#888"; ctx.font = "18px system-ui"; ctx.fillText("Open a design or type some text to see it here", W / 2 - 190, H / 2); }
+}
+new ResizeObserver(draw).observe($("cvWrap"));
+
+let refreshTimer = null;
+function refresh() { clearTimeout(refreshTimer); refreshTimer = setTimeout(refreshNow, 120); }
+function refreshNow() {
+  $("heightOut").textContent = design ? fmt(((+$("width").value || 0) * design.h / design.w).toFixed(1)) : "–";
+  lastJob = design ? makeGcode() : null;
+  const msgs = [];
+  if (lastJob) {
+    const m = Math.ceil(lastJob.minutes);
+    $("estimate").textContent = `About ${m < 60 ? m + " min" : Math.floor(m / 60) + " h " + (m % 60) + " min"} · ${lastJob.passes} pass${lastJob.passes > 1 ? "es" : ""} · ${fmt(lastJob.S.total)} mm deep`;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const p of lastJob.paths) for (const [x, y] of p.pts) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
+    if (x0 < 0 || y0 < 0) msgs.push("Part of the cut is left of or in front of the start corner. Increase the gaps.");
+    if (x1 > BED.w || y1 > BED.h) msgs.push(`The cut goes past the machine's ${BED.w} × ${BED.h} mm area. Make it smaller or move it.`);
+    if (lastJob.S.cut && !$("skin").checked) msgs.push("Without the skin, screw or clamp the piece down so it can't be thrown when it comes loose.");
+    if (lastJob.S.mode === "pocket" && BITS[$("bit").value].vbit) msgs.push("A V-bit isn't good for carving out. Pick a flat bit.");
+    if (lastJob.S.mode === "relief" && !BITS[$("bit").value].ball) msgs.push("3D carving needs a ball-nose bit (rounded end). Pick one in the Bit list.");
+    if (lastJob.S.mode === "relief") msgs.push("Use wood at least " + fmt(lastJob.S.reliefH + 3) + " mm thick. The background is carved away and the shape is left standing up.");
+    if (lastJob.note) msgs.push(lastJob.note);
+  } else $("estimate").textContent = "";
+  $("boundsWarn").hidden = !msgs.length; $("boundsWarn").textContent = msgs.join(" ");
+  updateButtons(); draw();
+}
+
+$("saveBtn").onclick = () => {
+  const job = makeGcode();
+  download((job.S.air ? "TEST-" : "") + "easy-carve.nc", job.text);
+};
+function download(name, text) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
+  a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+// ================= Machine error codes (GRBL 1.1) =================
+const GRBL_ERRORS = {
+  1: ["A command was missing its letter.", "The file may be damaged. Make the design again."],
+  2: ["A number in a command was missing or wrong.", "The file may be damaged. Make the design again."],
+  3: ["The machine didn't recognise a $ command.", "Its software may be a different version. Send the report."],
+  4: ["A negative number was given where it must be positive.", "Check the speeds in Advanced settings aren't negative."],
+  5: ["Homing is switched off in the machine's settings.", "Skip Home: jog to the corner by hand, then set the start and surface. (Setting $22=1 turns homing on, if limit switches are fitted.)"],
+  6: ["Step pulse setting too small.", "Machine setting problem. Send the report."],
+  7: ["The machine's memory was reset to factory settings.", "Settings may have changed. Send the report so they can be checked."],
+  8: ["The machine is busy, so the command wasn't allowed.", "Wait until it says Ready, then try again."],
+  9: ["The machine is locked (alarm) so it ignored the command.", "Press Unlock or Home, then try again."],
+  10: ["Soft limits need homing switched on.", "Machine setting problem. Send the report."],
+  11: ["A command line was too long.", "Send the report."],
+  12: ["A speed setting is higher than the machine allows.", "Machine setting problem. Send the report."],
+  13: ["The safety door is open.", "Close the door / check the door switch, then press Start again."],
+  14: ["A startup line is too long.", "Machine setting problem. Send the report."],
+  15: ["That move would go past the machine's limits, so it was ignored.", "You're at the edge of travel. Move the other way. If this happens everywhere, press Home first."],
+  16: ["The move command was not allowed.", "Send the report."],
+  17: ["Laser mode needs a PWM output.", "Machine setting problem. Send the report."],
+  20: ["The machine doesn't understand one of the commands.", "If the file came from other software, make it again in Easy Carve."],
+  21: ["Two commands conflict on one line.", "Send the report."],
+  22: ["No cutting speed was set.", "Check the cutting speed in Advanced settings."],
+  23: ["A command needed a whole number.", "Send the report."],
+  24: ["Two commands both want to move on one line.", "Send the report."],
+  25: ["A word was repeated in a command.", "Send the report."],
+  26: ["A move command had no position.", "Send the report."],
+  27: ["Line number out of range.", "Send the report."],
+  28: ["A command was missing a value (P or L).", "Send the report."],
+  29: ["Unsupported work position (G59.x).", "Send the report."],
+  30: ["G53 needs G0 or G1.", "Send the report."],
+  31: ["Leftover position on a line.", "Send the report."],
+  32: ["An arc had no end point.", "Send the report."],
+  33: ["A move target is invalid (often an arc).", "Make the design again in Easy Carve."],
+  34: ["An arc's radius is wrong.", "Make the design again in Easy Carve."],
+  35: ["An arc is missing its centre.", "Make the design again in Easy Carve."],
+  36: ["A line had unused values.", "Send the report."],
+  37: ["Tool length offset problem.", "Send the report."],
+  38: ["Tool number too high.", "Send the report."],
+};
+const GRBL_ALARMS = {
+  1: ["A limit switch was hit (hard limit).", "The position is now unknown. Check nothing is jammed, press Unlock, move away from the switch, then Home."],
+  2: ["The job would move past the machine's limits (soft limit).", "Usually the design runs off the edge of the area, or the surface was set so low that lifting the bit hits the top. Move the design or set the start nearer the middle."],
+  3: ["Reset while moving.", "Normal after pressing STOP. Press Unlock, then Home, before the next job."],
+  4: ["Probe was already touching before probing started.", "Check the probe clip and plate."],
+  5: ["Probe never touched the plate.", "Check the probe clip and plate."],
+  6: ["Homing was interrupted.", "Press Home again."],
+  7: ["The door opened while homing.", "Close the door and press Home again."],
+  8: ["Homing couldn't back off the limit switch.", "A switch may be stuck or wired wrong. Check the switches, then press Home."],
+  9: ["Homing couldn't find a limit switch.", "Check the limit switch cables are plugged in. If the machine has no switches, use Unlock instead of Home."],
+  10: ["Homing failed (dual axis / squaring).", "Check the limit switches, then press Home."],
+};
+function explain(kind, n) {
+  const t = (kind === "error" ? GRBL_ERRORS : GRBL_ALARMS)[n];
+  return t ? { what: t[0], fix: t[1] } : { what: `Unknown ${kind} ${n}.`, fix: "Press Copy report and send it for help." };
+}
+function showProblem(kind, n, context) {
+  const e = explain(kind, n);
+  diag.problems.push(`${new Date().toLocaleTimeString()} ${kind}:${n} ${e.what}${context ? " [" + context + "]" : ""}`);
+  $("errBox").hidden = false; $("errBox").innerHTML = "";
+  const b = document.createElement("b"); b.textContent = `${kind === "error" ? "Error" : "Alarm"} ${n}: ${e.what}`;
+  const p = document.createElement("div"); p.textContent = "What to do: " + e.fix;
+  const s = document.createElement("small"); s.textContent = context ? "Command: " + context : "";
+  $("errBox").append(b, p, s);
+  return e;
+}
+(function fillCodeList() {
+  const rows = [];
+  for (const [n, [w]] of Object.entries(GRBL_ALARMS)) rows.push(`Alarm ${n}: ${w}`);
+  for (const [n, [w]] of Object.entries(GRBL_ERRORS)) rows.push(`Error ${n}: ${w}`);
+  $("codeList").textContent = rows.join("\n"); $("codeList").style.whiteSpace = "pre-wrap";
+})();
+
+// ================= Machine (GRBL over USB) =================
+let port = null, writer = null, reader = null, rxBuf = "", waiting = null, sendChain = Promise.resolve();
+let probeTouching = false;
+let grblState = null, wco = [0, 0, 0], mpos = null, running = false, paused = false, stopping = false, pollTimer = null;
+const diag = { banner: "", ver: "", opt: "", settings: {}, sent: [], problems: [], lastStatus: "", info: [] };
+const enc = new TextEncoder();
+
+if (!("serial" in navigator)) { $("noSerial").hidden = false; $("connectBtn").disabled = true; }
+
+function log(s) { const l = $("log"); l.textContent += s + "\n"; if (l.textContent.length > 30000) l.textContent = l.textContent.slice(-20000); l.scrollTop = l.scrollHeight; }
+async function writeRaw(s) { if (writer) await writer.write(typeof s === "string" ? enc.encode(s) : s); }
+
+function sendLine(cmd) {
+  const p = sendChain.then(() => new Promise(res => {
+    waiting = res; log("> " + cmd);
+    diag.sent.push(cmd); if (diag.sent.length > 40) diag.sent.shift();
+    writeRaw(cmd + "\n").catch(() => res("error:write"));
+  }));
+  sendChain = p.catch(() => {});
+  return p;
+}
+// for buttons: send and explain any error
+async function command(cmd) {
+  const r = await sendLine(cmd);
+  if (r && r.startsWith("error:")) showProblem("error", +r.split(":")[1], cmd);
+  return r;
+}
+function releaseWaiting(reason) { if (waiting) { const w = waiting; waiting = null; w(reason); } sendChain = Promise.resolve(); }
+
+$("connectBtn").onclick = async () => {
+  if (port) return disconnect();
+  try {
+    port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 115200 });
+    writer = port.writable.getWriter();
+    readLoop();
+    await writeRaw("\r\n\r\n");
+    pollTimer = setInterval(() => writeRaw("?").catch(() => {}), 250);
+    setStatus("Connecting…", "");
+    updateButtons();
+    setTimeout(() => { if (port) readMachineInfo(true); }, 1500);
+  } catch (e) {
+    port = null;
+    if (e.name !== "NotFoundError") alert("Couldn't connect: " + e.message + "\n\nCheck the USB cable, switch the machine on and close any other program using it (Candle, gSender, Easel).");
+  }
+};
+
+async function disconnect() {
+  clearInterval(pollTimer);
+  try { reader && await reader.cancel(); } catch {}
+  try { writer && writer.releaseLock(); } catch {}
+  try { port && await port.close(); } catch {}
+  port = writer = reader = null; grblState = null; machinePos = null; running = false;
+  releaseWaiting("disconnected");
+  setStatus("Not connected", "Plug in the USB cable, switch the machine on, then press Connect.");
+  updateButtons(); draw();
+}
+navigator.serial?.addEventListener("disconnect", e => { if (e.target === port) { diag.problems.push("USB disconnected"); disconnect(); } });
+
+async function readLoop() {
+  const dec = new TextDecoder();
+  reader = port.readable.getReader();
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      rxBuf += dec.decode(value, { stream: true });
+      let i;
+      while ((i = rxBuf.indexOf("\n")) >= 0) { const line = rxBuf.slice(0, i).trim(); rxBuf = rxBuf.slice(i + 1); if (line) onLine(line); }
+    }
+  } catch (e) { log("! " + e.message); diag.problems.push("Read error: " + e.message); }
+  finally { try { reader.releaseLock(); } catch {} }
+}
+
+function onLine(line) {
+  if (line.startsWith("<")) return parseStatus(line);
+  if (!(stream && line === "ok")) log(line);
+  let m;
+  if ((m = line.match(/^\$(\d+)=(.*)$/))) { diag.settings[m[1]] = m[2]; applyMachineSettings(); }
+  else if (line.startsWith("[VER:")) diag.ver = line;
+  else if (line.startsWith("[OPT:")) diag.opt = line;
+  else if (line.startsWith("[") ) { diag.info.push(line); if (diag.info.length > 30) diag.info.shift(); }
+  if (line === "ok" || line.startsWith("error")) {
+    if (stream) return streamAck(line);
+    if (waiting) { const w = waiting; waiting = null; w(line); } return;
+  }
+  if (line.startsWith("ALARM")) {
+    const n = +line.split(":")[1];
+    const e = showProblem("alarm", n);
+    setStatus("Locked", e.what + " " + e.fix);
+    if (running) { stopping = true; endStream(); }
+    releaseWaiting("alarm:" + n);
+  }
+  if (/^Grbl/i.test(line)) { diag.banner = line; endStream(); releaseWaiting("reset"); }
+}
+
+function applyMachineSettings() {
+  const s = diag.settings;
+  if (+s[130] > 50 && +s[131] > 50) { BED.w = +s[130]; BED.h = +s[131]; }
+  if (s[30] !== undefined && !applyMachineSettings.spindleSet) { $("spindle").value = +s[30]; applyMachineSettings.spindleSet = true; }
+  refresh();
+}
+
+async function readMachineInfo(quiet) {
+  await sendLine("$I"); await sendLine("$$"); await sendLine("$G");
+  if (!quiet) { $("report").hidden = false; $("report").value = buildReport(); }
+}
+
+function parseStatus(line) {
+  diag.lastStatus = line;
+  const parts = line.slice(1, -1).split("|");
+  grblState = parts[0].split(":")[0];
+  let wpos = null;
+  for (const f of parts.slice(1)) {
+    const [k, v] = f.split(":"); const n = v ? v.split(",").map(Number) : [];
+    if (k === "MPos") mpos = n; else if (k === "WPos") wpos = n; else if (k === "WCO") wco = n;
+  }
+  const wp = wpos || (mpos && mpos.map((v, i) => v - (wco[i] || 0)));
+  if (wp) machinePos = wp;
+  probeTouching = parts.some(f => f.startsWith("Pn:") && f.slice(3).includes("P"));
+  $("probeTest").textContent = probeTouching ? "Touching ✓" : "Not touching";
+  const where = wp ? `Bit at X ${wp[0].toFixed(1)}  Y ${wp[1].toFixed(1)}  Z ${wp[2].toFixed(1)} mm` : "";
+  const words = { Idle: "Ready", Run: running ? "Cutting…" : "Moving…", Hold: "Paused", Jog: "Moving…", Home: "Finding home…",
+                  Alarm: "Locked – press Home (or Unlock)", Door: "Door open – close it to carry on", Check: "Checking", Sleep: "Asleep" };
+  setStatus(words[grblState] || grblState, where);
+  updateButtons(); draw();
+}
+
+function setStatus(main, sub) { $("status").innerHTML = ""; $("status").append(main); const s = document.createElement("small"); s.textContent = sub; $("status").append(s); }
+
+function updateButtons() {
+  const on = !!port, idle = on && !running && (grblState === "Idle" || grblState === null);
+  $("connBadge").textContent = on ? "Machine connected" : "Machine not connected";
+  $("connBadge").classList.toggle("on", on);
+  $("connectBtn").textContent = on ? "Disconnect" : "Connect to machine";
+  $("homeBtn").disabled = $("unlockBtn").disabled = !on || running;
+  $("gotoZeroBtn").disabled = !idle;
+  $("zeroXYBtn").disabled = $("zeroZBtn").disabled = !idle;
+  document.querySelectorAll("[data-jog]").forEach(b => b.disabled = !on || running || !(grblState === "Idle" || grblState === "Jog"));
+  $("startBtn").disabled = !idle || !design || grblState !== "Idle";
+  $("pauseBtn").disabled = !running;
+  $("stopBtn").disabled = !on;
+  $("readInfoBtn").disabled = !on || running;
+  $("probeBtn").disabled = !idle || grblState !== "Idle";
+  $("checkBtn").disabled = !on || running;
+  $("resumeBtn").disabled = !idle || grblState !== "Idle";
+  $("saveBtn").disabled = !design;
+  $("pauseBtn").textContent = paused ? "Resume" : "Pause";
+}
+
+let jogStep = 10;
+document.querySelectorAll("[data-step]").forEach(b => b.onclick = () => {
+  jogStep = +b.dataset.step;
+  document.querySelectorAll("[data-step]").forEach(x => x.classList.toggle("sel", x === b));
+});
+document.querySelectorAll("[data-jog]").forEach(b => b.onclick = () => {
+  const axis = b.dataset.jog[0], dir = b.dataset.jog[1] === "+" ? 1 : -1;
+  $("errBox").hidden = true;
+  command(`$J=G91 G21 ${axis}${fmt(dir * jogStep)} F${axis === "Z" ? 400 : 2000}`);
+});
+
+$("homeBtn").onclick = () => { $("errBox").hidden = true; setStatus("Finding home…", "The machine moves to its corner switches."); command("$H"); };
+$("unlockBtn").onclick = () => { $("errBox").hidden = true; command("$X"); };
+$("gotoZeroBtn").onclick = async () => {
+  $("errBox").hidden = true;
+  // lift first (staying below the top of travel), then go to the corner
+  const up = mpos ? Math.max(0, Math.min(5, -mpos[2] - 1)) : 5;
+  if (up > 0) await command(`G91 G0 Z${fmt(up)}`);
+  await command("G90 G0 X0 Y0");
+};
+$("zeroXYBtn").onclick = () => command("G10 L20 P1 X0 Y0");
+$("zeroZBtn").onclick = () => command("G10 L20 P1 Z0");
+$("readInfoBtn").onclick = () => readMachineInfo(false);
+
+// ----- streaming: keep GRBL's 128-byte input buffer topped up (smooth motion on 3D jobs) -----
+const RX_SIZE = 127;
+let stream = null;
+function streamFrom(lines) {
+  return new Promise(res => { stream = { lines, next: 0, acked: 0, sizes: [], used: 0, res, fail: null }; pump(); });
+}
+function pump() {
+  const st = stream; if (!st) return;
+  let chunk = "";
+  while (!stopping && st.next < st.lines.length) {
+    const l = st.lines[st.next] + "\n";
+    if (st.used + l.length > RX_SIZE) break;
+    st.sizes.push(l.length); st.used += l.length; st.next++; chunk += l;
+    diag.sent.push(st.lines[st.next - 1]); if (diag.sent.length > 40) diag.sent.shift();
+  }
+  if (chunk) writeRaw(chunk).catch(() => {});
+  if (st.acked >= st.lines.length || st.fail || stopping) endStream();
+}
+function streamAck(line) {
+  const st = stream;
+  st.used -= st.sizes.shift() || 0;
+  if (line.startsWith("error") && !st.fail) {
+    st.fail = { line: st.acked + 1, cmd: st.lines[st.acked], r: line };
+    log("! " + line + " on: " + st.lines[st.acked]);
+    st.acked++;
+    haltMachine("error");
+    return;
+  }
+  st.acked++;
+  pump();
+}
+function endStream() { if (stream) { const st = stream; stream = null; st.res(st); } }
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// stop motion and spindle immediately (feed hold, then reset)
+async function haltMachine(why) {
+  stopping = true; paused = false;
+  diag.problems.push(`${new Date().toLocaleTimeString()} halted (${why})`);
+  try { await writeRaw("!"); } catch {}
+  setTimeout(async () => { try { await writeRaw(new Uint8Array([0x18])); } catch {} endStream(); releaseWaiting("stopped"); }, 300);
+}
+
+// ----- keep the computer awake during a job -----
+let wakeLock = null;
+async function keepAwake(on) {
+  try {
+    if (on && "wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen");
+    else if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
+  } catch {}
+}
+document.addEventListener("visibilitychange", () => { if (running && document.visibilityState === "visible") keepAwake(true); });
+
+// ----- running a job, with resume -----
+let lastRun = null;   // { lines, meta, acked, done }
+function jobLines(text) { return text.split("\n").map(l => l.replace(/\(.*?\)/g, "").trim()).filter(Boolean); }
+
+function resumePlan(lines, k) {
+  let x = 0, y = 0, z = null, f = null, sp = null, m;
+  for (let i = 0; i < k; i++) {
+    const l = lines[i];
+    if ((m = l.match(/X(-?[\d.]+)/))) x = +m[1];
+    if ((m = l.match(/Y(-?[\d.]+)/))) y = +m[1];
+    if ((m = l.match(/Z(-?[\d.]+)/))) z = +m[1];
+    if ((m = l.match(/F([\d.]+)/))) f = +m[1];
+    if ((m = l.match(/M3 S([\d.]+)/))) sp = +m[1];
+  }
+  const safeLine = lines.find(l => /^G0 Z/.test(l)) || "G0 Z5";
+  const pre = ["G21 G90 G17 G94", safeLine, `M3 S${sp ?? 1000}`, "G4 P3", `G0 X${fmt(x)} Y${fmt(y)}`];
+  if (z !== null) pre.push(`G1 Z${fmt(z)} F${fmt(lastRun?.meta?.plunge || 200)}`);
+  return { pre, feed: f };
+}
+
+async function runJob(lines, meta, startAt = 0) {
+  $("errBox").hidden = true; $("resumeBox").hidden = true;
+  running = true; paused = false; stopping = false; updateButtons(); keepAwake(true);
+  let send = lines, offset = 0;
+  if (startAt > 0) {
+    const plan = resumePlan(lines, startAt), rest = lines.slice(startAt);
+    if (plan.feed && /^G1\b/.test(rest[0]) && !/F/.test(rest[0])) rest[0] += ` F${fmt(plan.feed)}`;
+    send = [...plan.pre, ...rest]; offset = startAt - plan.pre.length;
+  }
+  lastRun = { lines, meta, acked: startAt, done: false };
+  diag.problems.push(`${new Date().toLocaleTimeString()} job ${startAt ? "resumed at line " + startAt : "started"}: ${meta.name}, ${lines.length} lines`);
+  $("prog").max = lines.length; $("prog").value = startAt;
+  const t0 = Date.now(), left0 = meta.minutes * (1 - startAt / lines.length);
+  const tick = setInterval(() => {
+    if (!stream) return;
+    const done = Math.max(startAt, stream.acked + offset); lastRun.acked = done;
+    $("prog").value = done;
+    $("progText").textContent = `${Math.round(done / lines.length * 100)}% · about ${Math.ceil(Math.max(0, left0 - (Date.now() - t0) / 60000))} min left`;
+  }, 500);
+  const st = await streamFrom(send);
+  clearInterval(tick);
+  lastRun.acked = Math.max(startAt, st.acked + offset);
+  if (!st.fail && !stopping && port) { await sleep(800); while (!stopping && port && grblState !== "Idle") await sleep(200); }
+  const ok = !st.fail && !stopping && !!port;
+  running = false; paused = false; keepAwake(false); updateButtons();
+  lastRun.done = ok;
+  if (st.fail) {
+    const e = showProblem("error", +st.fail.r.split(":")[1], `line ${st.fail.line + Math.max(0, offset)}: ${st.fail.cmd}`);
+    $("progText").textContent = "Stopped: " + e.what;
+  } else if (ok) $("progText").textContent = meta.doneMsg || "Finished! Wait for the bit to stop spinning before touching it.";
+  else $("progText").textContent = "Stopped.";
+  if (!ok && !meta.test && lastRun.acked > 5) {
+    const homing = diag.settings[22] === "1";
+    $("resumeText").textContent = `The job stopped about ${Math.round(lastRun.acked / lines.length * 100)}% of the way through. ` +
+      (homing ? "Press Unlock, then Home, then use the button below. Don't change the start corner or surface."
+              : "Your machine has no homing, so its position may be lost: press Unlock, jog the bit back exactly over the start corner and set it again (leave the surface alone), then use the button below.");
+    $("resumeBox").hidden = false;
+  }
+  return ok;
+}
+
+$("startBtn").onclick = async () => {
+  const job = makeGcode(), air = job.S.air;
+  const ok = confirm(air
+    ? "TEST RUN IN THE AIR\n\nThe bit stays above the wood. Watch that it moves where you expect.\n\nStart?"
+    : "Before cutting, check:\n\n• The wood is clamped down firmly\n• You set the start corner AND the surface\n• The bit is tight in the spindle\n• Safety glasses on, dust extraction on\n\nStart cutting?");
+  if (!ok) return;
+  await runJob(jobLines(job.text), { name: design.name, minutes: job.minutes, plunge: job.S.plunge,
+    doneMsg: air ? "Test run finished. Untick the test box and press Start to cut for real." : null });
+};
+
+$("resumeBtn").onclick = async () => {
+  if (!lastRun || lastRun.done) return;
+  const k = Math.max(5, lastRun.acked - 25);   // go back a little: the last few moves may not have been cut
+  if (!confirm(`Carry on from ${Math.round(k / lastRun.lines.length * 100)}%?\n\nThe bit will lift, move to where it stopped (a little before), and carry on cutting.\n\nCheck the start corner and surface haven't changed.`)) return;
+  await runJob(lastRun.lines, lastRun.meta, k);
+};
+
+$("pauseBtn").onclick = async () => {
+  if (!running) return;
+  if (!paused) { await writeRaw("!"); paused = true; } else { await writeRaw("~"); paused = false; }
+  updateButtons();
+};
+
+$("stopBtn").onclick = () => { haltMachine("STOP pressed"); setStatus("Stopped", "Press Unlock, then Home, before moving again."); };
+
+// ----- touch plate -----
+$("probeBtn").onclick = async () => {
+  const t = +$("plateT").value;
+  if (!(t > 0)) return alert("Enter the plate thickness first. Measure it with a ruler or calipers (it's usually printed on it).");
+  if (probeTouching) return alert("The machine already thinks the plate is touching. Check the clip isn't touching the plate or the wood, then try again.");
+  if (!confirm("1. Put the plate flat on top of the wood, under the bit.\n2. Clip the crocodile clip onto the bit.\n3. Lower the bit to about 1 cm above the plate.\n\nThe bit will move down slowly until it touches the plate. Ready?")) return;
+  $("errBox").hidden = true;
+  let r = await command("G91 G38.2 Z-25 F150");
+  if (r === "ok") { await command("G0 Z1.5"); r = await command("G38.2 Z-3 F30"); }
+  if (r === "ok") {
+    await command(`G10 L20 P1 Z${fmt(t)}`);
+    await command("G0 Z5");
+  }
+  await sendLine("G90");
+  if (r === "ok") alert("Surface found and set.\n\nNow take the clip off the bit and move the plate out of the way!");
+  else if (!/alarm/.test(r)) alert("The touch plate didn't work. Check the clip and plate, press Unlock if needed, and try again.");
+};
+
+// ----- machine check wizard -----
+function wiz(title, html, buttons) {
+  $("wizTitle").textContent = title; $("wizBody").innerHTML = html;
+  const b = $("wizBtns"); b.innerHTML = "";
+  for (const [label, fn, cls] of buttons) { const el = document.createElement("button"); el.textContent = label; if (cls) el.className = cls; el.onclick = fn; b.append(el); }
+  if (!$("wiz").open) $("wiz").showModal();
+}
+const wizClose = () => $("wiz").close();
+const AXES = [
+  { a: "X", bit: 1, move: "$J=G91 G21 X10 F1000", ask: "Did the bit move to the <b>RIGHT</b>?" },
+  { a: "Y", bit: 2, move: "$J=G91 G21 Y10 F1000", ask: "Did the bit move <b>AWAY FROM YOU</b> (towards the back)?" },
+  { a: "Z", bit: 4, move: "$J=G91 G21 Z3 F300",   ask: "Did the bit move <b>UP</b>?" },
+];
+let wrongAxes = 0;
+$("checkBtn").onclick = () => wiz("Check my machine",
+  `<p>This makes sure the machine moves the right way and the right distance. It takes about 5 minutes.</p>
+   <p>You need:</p><ul><li>A scrap of wood at least <b>80 × 80 mm</b>, clamped down</li><li>The flat bit fitted</li><li>A ruler</li></ul>
+   <p>Before starting, raise the bit well clear of the wood and the clamps, and keep it near the middle of the machine.</p>`,
+  [["Cancel", wizClose], ["Start", () => { wrongAxes = 0; wizAxis(0); }, "main"]]);
+
+function wizAxis(i) {
+  if (i >= AXES.length) return wizDirections();
+  const ax = AXES[i];
+  if (grblState === "Alarm") return wiz("The machine is locked",
+    `<p>Press <b>Home</b> (or <b>Unlock</b> if the machine has no limit switches) first.</p>`,
+    [["Home now", async () => { await command("$H"); wizAxis(i); }], ["Unlock", async () => { await command("$X"); wizAxis(i); }], ["Cancel", wizClose]]);
+  wiz(`Direction test ${i + 1} of 3`, `<p>Watch the bit, then press <b>Move it</b>. It moves ${ax.a === "Z" ? "3" : "10"} mm.</p>`,
+    [["Cancel", wizClose], ["Move it", async () => {
+      const r = await command(ax.move);
+      if (r !== "ok") return wiz("It didn't move", `<p>The machine refused (${r}). It may be at the edge of its travel. Jog it towards the middle and try again.</p>`, [["Try again", () => wizAxis(i)], ["Cancel", wizClose]]);
+      await sleep(1500);
+      wiz(`Direction test ${i + 1} of 3`, `<p>${ax.ask}</p>`,
+        [["Yes", () => wizAxis(i + 1), "yes"], ["No, the other way", () => { wrongAxes |= ax.bit; wizAxis(i + 1); }, "no"], ["It didn't move", () => wiz("Didn't move",
+          "<p>Check the machine is switched on and the cables to the motors are plugged in. Then press Copy report in the Help section and send it for help.</p>", [["Close", wizClose]])]]);
+    }, "main"]]);
+}
+
+async function wizDirections() {
+  if (!wrongAxes) return wizSquareStart();
+  const names = AXES.filter(a => wrongAxes & a.bit).map(a => a.a).join(" and ");
+  wiz("Some moves went the wrong way", `<p><b>${names}</b> moved the wrong way. Easy Carve can fix this in the machine's own settings (it remembers them).</p>
+    <p class="hint">This changes setting $3 (direction)${diag.settings[22] === "1" ? " and $23 (homing direction)" : ""}. Press Copy report afterwards if you want someone to double-check.</p>`,
+    [["Cancel", wizClose], ["Fix it", async () => {
+      await readMachineInfo(true);
+      const d3 = +(diag.settings[3] || 0), d23 = +(diag.settings[23] || 0);
+      await command(`$3=${d3 ^ wrongAxes}`);
+      if (diag.settings[22] === "1") await command(`$23=${d23 ^ wrongAxes}`);
+      await readMachineInfo(true);
+      wiz("Fixed", "<p>Let's test the directions again to make sure.</p>", [["Test again", () => { wrongAxes = 0; wizAxis(0); }, "main"]]);
+    }, "main"]]);
+}
+
+function wizSquareStart() {
+  wiz("Size test", `<p>Directions are right. Now a small test cut: a <b>50 mm square</b> with a circle inside, 0.5 mm deep.</p>
+    <ol><li>Use the arrow buttons to move the bit over the scrap wood, about 10 mm in from its front-left corner.</li>
+    <li>Lower the bit (Z↓, small steps) until it <b>just touches</b> the wood.</li></ol>
+    <p>You can leave this box open and use the arrow buttons behind it after pressing <b>Let me move the bit</b>.</p>`,
+    [["Let me move the bit", () => { wizClose(); $("wizResume").hidden = false; }], ["Bit is in place", wizSquareCut, "main"]]);
+}
+
+async function wizSquareCut() {
+  $("wizResume").hidden = true;
+  await command("G10 L20 P1 X0 Y0 Z0");
+  wiz("Ready to cut the test", "<p>Spindle will start and cut a 50 mm square and a circle, 0.5 mm deep. Safety glasses on.</p>",
+    [["Cancel", wizClose], ["Cut the test", async () => {
+      wizClose();
+      const S = settings(), f = Math.min(S.feed, 800), pl = Math.min(S.plunge, 300);
+      const L = ["G21 G90 G17 G94", "G0 Z5", `M3 S${fmt(S.spindle || 1000)}`, "G4 P3", "G0 X5 Y5", `G1 Z-0.5 F${pl}`,
+                 `G1 X55 Y5 F${f}`, "G1 X55 Y55", "G1 X5 Y55", "G1 X5 Y5", "G0 Z5", "G0 X45 Y30", `G1 Z-0.5 F${pl}`];
+      for (let i = 1; i <= 72; i++) { const a = i / 72 * 2 * Math.PI; L.push(`G1 X${fmt(30 + 15 * Math.cos(a))} Y${fmt(30 + 15 * Math.sin(a))} F${f}`); }
+      L.push("G0 Z5", "M5", "G0 X0 Y0");
+      const ok = await runJob(L, { name: "machine check", minutes: 1, test: true, doneMsg: "Test cut finished." });
+      if (ok) wizMeasure();
+    }, "main"]]);
+}
+
+function wizMeasure() {
+  wiz("Measure the square", `<p>Measure the square <b>from the middle of one line to the middle of the other</b>.</p>
+    <label>Left to right <span><input id="mx" type="number" value="50" step="0.1"> mm</span></label>
+    <label>Front to back <span><input id="my" type="number" value="50" step="0.1"> mm</span></label>
+    <p class="hint">The circle should be round, not oval, and sit in the middle of the square.</p>`,
+    [["Check", async () => {
+      const mx = +$("mx").value, my = +$("my").value, bad = [];
+      if (Math.abs(mx - 50) > 0.5) bad.push(["X", 100, mx]);
+      if (Math.abs(my - 50) > 0.5) bad.push(["Y", 101, my]);
+      if (!bad.length) return wiz("All good ✓", `<p class="ok">Your machine moves the right way and the right distance. You're ready to make things!</p>`, [["Close", wizClose, "main"]]);
+      await readMachineInfo(true);
+      const fixes = bad.map(([a, n, m]) => [a, n, +(+(diag.settings[n] || 0) * 50 / m).toFixed(3)]).filter(f => f[2] > 0);
+      wiz("The size is off", `<p>${bad.map(([a, , m]) => `${a === "X" ? "Left to right" : "Front to back"} measured ${m} mm instead of 50`).join("; ")}.</p>
+        <p>Easy Carve can correct the machine's steps-per-mm setting: ${fixes.map(f => `$${f[1]} → ${f[2]}`).join(", ")}.</p>
+        <p class="hint">Double-check your measuring first. After fixing, run the check again.</p>`,
+        [["Cancel", wizClose], ["Fix it", async () => { for (const [, n, v] of fixes) await command(`$${n}=${v}`); await readMachineInfo(true);
+          wiz("Fixed", "<p>Run the check again on a fresh bit of scrap to confirm.</p>", [["Close", wizClose, "main"]]); }, "main"]]);
+    }, "main"]]);
+}
+
+$("wizResume").onclick = () => wizSquareCut();
+
+// ----- remember settings between visits -----
+const KEEP = ["material", "bit", "depth", "thick", "skin", "exact", "feed", "plunge", "stepdown", "spindle", "safe", "rH", "rRound",
+              "rBorder", "rLines", "rLineD", "rFinish", "plateT", "width", "offX", "offY", "detail", "imgKind", "fontSel", "boldIn"];
+function saveSettings() {
+  try {
+    const o = { mode: mode() };
+    for (const id of KEEP) { const e = $(id); o[id] = e.type === "checkbox" ? e.checked : e.value; }
+    localStorage.setItem("easyCarve.settings", JSON.stringify(o));
+  } catch {}
+}
+function loadSettings() {
+  try {
+    const o = JSON.parse(localStorage.getItem("easyCarve.settings") || "null");
+    if (!o) return false;
+    for (const id of KEEP) if (id in o) { const e = $(id); if (e.type === "checkbox") e.checked = o[id]; else e.value = o[id]; }
+    if (!BITS[$("bit").value]) $("bit").value = "flat3";
+    if (!MATERIALS[$("material").value]) $("material").value = "pine";
+    const r = o.mode && document.querySelector(`input[name=mode][value=${o.mode}]`);
+    if (r) r.checked = true;
+    showModeRows();
+    return true;
+  } catch { return false; }
+}
+let saveTimer = null;
+document.addEventListener("input", () => { clearTimeout(saveTimer); saveTimer = setTimeout(saveSettings, 500); });
+document.addEventListener("change", saveSettings);
+
+// ================= Help report =================
+const SETTING_NAMES = { 20: "soft limits", 21: "hard limits", 22: "homing", 23: "homing direction", 30: "spindle max", 31: "spindle min",
+  32: "laser mode", 100: "X steps/mm", 101: "Y steps/mm", 102: "Z steps/mm", 110: "X max speed", 111: "Y max speed", 112: "Z max speed",
+  130: "X travel", 131: "Y travel", 132: "Z travel" };
+function buildReport() {
+  const S = settings(), r = [];
+  r.push(`=== ${APP} report ${new Date().toLocaleString()} ===`);
+  r.push(`Browser: ${navigator.userAgent}`);
+  r.push(`Connected: ${!!port}   State: ${grblState || "-"}   Running: ${running}`);
+  r.push(`Firmware: ${diag.banner || "-"}  ${diag.ver}  ${diag.opt}`);
+  r.push(`Last status: ${diag.lastStatus || "-"}`);
+  r.push("", "-- Problems / events --", ...(diag.problems.length ? diag.problems.slice(-20) : ["none"]));
+  r.push("", "-- Machine settings --");
+  const keys = Object.keys(diag.settings).sort((a, b) => a - b);
+  r.push(...(keys.length ? keys.map(k => `$${k}=${diag.settings[k]}${SETTING_NAMES[k] ? "  (" + SETTING_NAMES[k] + ")" : ""}`) : ["not read yet (connect, then press Read machine settings)"]));
+  if (diag.info.length) r.push("", "-- Machine info --", ...diag.info);
+  r.push("", "-- Job --");
+  r.push(design ? `Design: ${design.name}, ${$("width").value} mm wide at ${$("offX").value},${$("offY").value}` : "No design");
+  r.push(`Mode ${S.mode}, depth ${fmt(S.total)} mm, ${MATERIALS[$("material").value].name}, ${BITS[$("bit").value].name}`);
+  r.push(`Feed ${S.feed}, plunge ${S.plunge}, step ${S.step}, spindle ${S.spindle}, safe ${S.safe}, test run ${S.air}`);
+  r.push("", "-- Last commands sent --", ...(diag.sent.length ? diag.sent : ["none"]));
+  r.push("", "-- Last machine messages --", ...$("log").textContent.trim().split("\n").slice(-40));
+  return r.join("\n");
+}
+$("copyReportBtn").onclick = async () => {
+  const text = buildReport();
+  $("report").hidden = false; $("report").value = text;
+  try { await navigator.clipboard.writeText(text); $("copyReportBtn").textContent = "Copied ✓"; }
+  catch { $("report").select(); $("copyReportBtn").textContent = "Select all & copy the box"; }
+  setTimeout(() => $("copyReportBtn").textContent = "Copy report", 2500);
+};
+
+window.addEventListener("beforeunload", e => { if (running) { e.preventDefault(); e.returnValue = ""; } });
+
+if (!loadSettings()) applyPreset(); else refresh();
+// ----- website extras: works offline, can be installed like an app -----
+if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) navigator.serviceWorker.register("sw.js").catch(() => {});
+let installPrompt = null;
+window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installPrompt = e; $("installBtn").hidden = false; });
+$("installBtn").onclick = async () => { if (!installPrompt) return; installPrompt.prompt(); await installPrompt.userChoice; installPrompt = null; $("installBtn").hidden = true; };
+
+window.EasyCarve = { loadSvgText, makeGcode, makeTextDesign, setDesign, buildReport, explain, onLine, resumePlan, jobLines };
+</script>
+</body>
+</html>
