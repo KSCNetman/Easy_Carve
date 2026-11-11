@@ -97,7 +97,7 @@
 <body>
 <header>
   <h1>Easy Carve</h1>
-  <span class="hint">for Genmitsu PROVerXL 4030 · v0.7</span>
+  <span class="hint">for Genmitsu PROVerXL 4030 · v0.8</span>
   <a href="quick-guide.pdf" target="_blank" class="hint" style="margin-left:auto">Quick guide (PDF)</a>
   <button id="installBtn" hidden style="padding:6px 12px">Install on this computer</button>
   <span id="connBadge" style="margin-left:0">Machine not connected</span>
@@ -165,13 +165,14 @@
     <h2><span class="num">2</span> How to cut it <span id="cutFor" class="hint" style="font-weight:400"></span></h2>
     <div class="modes">
       <label><input type="radio" name="mode" value="engrave" checked><b>Engrave</b><span>Carve along the lines</span></label>
+      <label><input type="radio" name="mode" value="vcarve"><b>V-carve</b><span>Crisp chiselled letters &amp; shapes</span></label>
       <label><input type="radio" name="mode" value="pocket"><b>Carve out</b><span>Hollow out the shapes / letters</span></label>
       <label><input type="radio" name="mode" value="cut"><b>Cut out</b><span>Cut right through</span></label>
       <label><input type="radio" name="mode" value="relief"><b>3D raised</b><span>Rounded carving that stands up</span></label>
     </div>
     <label>Material <select id="material"></select></label>
     <label>Bit <select id="bit"></select></label>
-    <label id="depthRow">How deep <span><input id="depth" type="number" value="1.5" min="0.1" step="0.1"> mm</span></label>
+    <label id="depthRow"><span id="depthLabel">How deep</span> <span><input id="depth" type="number" value="1.5" min="0.1" step="0.1"> mm</span></label>
     <div id="reliefRows" hidden>
       <label>How tall it stands <span><input id="rH" type="number" value="4" min="0.5" step="0.5"> mm</span></label>
       <label>How rounded the edges <span><input id="rRound" type="number" value="6" min="0" step="1"> mm</span></label>
@@ -185,6 +186,7 @@
         <option value="0.2">Quick (ridged)</option>
       </select></label>
     </div>
+    <div id="vcHint" class="hint" hidden>The V-bit goes deeper where the shape is wider, giving sharp, chiselled edges like a sign-writer. Wide areas stop at the deepest setting and get a flat bottom.</div>
     <label id="thickRow" hidden>Material thickness <span><input id="thick" type="number" value="6" min="0.5" step="0.5"> mm</span></label>
     <label id="exactRow" class="check" hidden><input type="checkbox" id="exact" checked>
       <span>Cut around the outside so the piece comes out exactly the size shown</span></label>
@@ -271,7 +273,7 @@
 
 <script>
 "use strict";
-const APP = "Easy Carve v0.7";
+const APP = "Easy Carve v0.8";
 const $ = id => document.getElementById(id);
 
 // ================= Presets =================
@@ -281,10 +283,18 @@ const MATERIALS = {
   mdf:     { name: "MDF",                       feed: 900, plunge: 300, step: 1.2 },
   hard:    { name: "Hardwood (oak, walnut)",    feed: 600, plunge: 200, step: 0.7 },
   acrylic: { name: "Acrylic / plastic",         feed: 600, plunge: 200, step: 0.5 },
+  carving: { name: "Carving wood (lime, cherry)", feed: 700, plunge: 250, step: 0.9 },
+  slate:   { name: "Slate (engraving)",         feed: 400, plunge: 100, step: 0.3,
+             note: "Slate: use a V-bit, keep it shallow (0.5–1.5 mm), and wear a dust mask – slate dust is harmful. Lightly oil it afterwards to make the carving stand out." },
+  corian:  { name: "Corian / solid surface",    feed: 600, plunge: 200, step: 0.5 },
+  alu:     { name: "Aluminium (light engraving only)", feed: 300, plunge: 60, step: 0.15,
+             note: "Aluminium: light engraving only, with a single-flute or engraving bit, a few drops of WD-40 or cutting fluid, and stay with it." },
 };
 const BITS = {
   flat3: { name: 'Flat 3.175 mm (1/8") – came with machine', dia: 3.175, stepMul: 1.0, feedMul: 1.0 },
-  vbit:  { name: "V-bit (sharp lettering)",                    dia: 0.6,   stepMul: 0.6, feedMul: 0.8, vbit: true },
+  vbit:  { name: "V-bit 60° (sharp lettering)",                dia: 0.6,   stepMul: 0.6, feedMul: 0.8, vbit: true, angle: 60 },
+  vbit90:{ name: "V-bit 90° (bold, wide lettering)",           dia: 0.6,   stepMul: 0.6, feedMul: 0.8, vbit: true, angle: 90 },
+  vbit30:{ name: "V-bit 30° (fine detail)",                    dia: 0.4,   stepMul: 0.5, feedMul: 0.7, vbit: true, angle: 30 },
   flat1: { name: "Flat 1 mm (fine detail)",                    dia: 1.0,   stepMul: 0.4, feedMul: 0.6 },
   flat6: { name: "Flat 6 mm",                                  dia: 6.0,   stepMul: 1.2, feedMul: 1.0 },
   ball3: { name: "Ball-nose 3.175 mm (for 3D)",                dia: 3.175, stepMul: 0.8, feedMul: 1.0, ball: true },
@@ -319,6 +329,8 @@ function showModeRows() {
   const cut = mode() === "cut", rel = mode() === "relief";
   $("depthRow").hidden = cut || rel; $("thickRow").hidden = !cut; $("skinRow").hidden = !cut; $("exactRow").hidden = !cut;
   $("reliefRows").hidden = !rel;
+  $("depthLabel").textContent = mode() === "vcarve" ? "Deepest it goes" : "How deep";
+  $("vcHint").hidden = mode() !== "vcarve";
 }
 document.querySelectorAll("input[name=mode]").forEach(r => r.onchange = () => {
   showModeRows();
@@ -328,6 +340,7 @@ document.querySelectorAll("input[name=mode]").forEach(r => r.onchange = () => {
   $("reliefRows").hidden = !rel;
   if (rel && !BITS[$("bit").value].ball) { $("bit").value = "ball3"; applyPreset(); return; }
   if (!rel && BITS[$("bit").value].ball) { $("bit").value = "flat3"; applyPreset(); return; }
+  if (mode() === "vcarve" && !BITS[$("bit").value].vbit) { $("bit").value = "vbit"; applyPreset(); return; }
   syncFromDom(); refresh();
 });
 ["width", "offX", "offY", "rot", "depth", "thick", "skin", "exact", "rH", "rRound", "rBorder", "rLines", "rLineD", "rFinish", "feed", "plunge", "stepdown", "spindle", "safe", "airRun"]
@@ -852,7 +865,7 @@ function makeTextDesign() {
     d.isText = true;
     if (!(sel() && sel().design.isText)) pendingAdd = true;
     setDesign(d, `"${text.replace(/\n/g, " / ")}" in ${$("fontSel").value}`);
-    if (mode() === "engrave") document.querySelector("input[value=pocket]").click();
+    if (mode() !== "vcarve") document.querySelector("input[value=vcarve]").click();
   } catch (err) { alert(err.message); }
 }
 $("useTextBtn").onclick = async () => { busy(true); await nextFrame(); makeTextDesign(); busy(false); };
@@ -1039,6 +1052,38 @@ function toolpathsFor(it, S) {
   if (tpCache.size > 100) tpCache.clear();
   tpCache.set(key, val);
   return val;
+}
+
+// V-carve: rings at growing distance from the edge, each at the depth where a V-bit's sides just touch the edge
+function vcarvePaths(closed, open, S, bitKey) {
+  if (!closed.length) return { paths: open, note: "no closed shapes to V-carve, so it will engrave the lines instead." };
+  const bit = BITS[bitKey], half = (bit.angle || 60) * Math.PI / 360, cot = 1 / Math.tan(half);
+  const maxD = Math.max(0.2, S.vMax), rMax = maxD * Math.tan(half);
+  const R = rasterize(closed, 2), W = R.W, H = R.H, res = R.res;
+  const notIn = new Uint8Array(W * H); for (let i = 0; i < notIn.length; i++) notIn[i] = 1 - R.inside[i];
+  const dist = edt(notIn, W, H);
+  let widest = 0; for (let i = 0; i < dist.length; i++) if (dist[i] > widest) widest = dist[i];
+  widest = (widest - 0.5) / res;
+  const rings = [], v = new Float32Array(W * H);
+  const sloped = Math.max(0.12, Math.min(0.3, rMax / 6)), flat = 0.3;
+  let d = Math.min(0.08, sloped / 2), n = 0;
+  while (d < widest && n++ < 500) {
+    const lim = d * res + 0.5;
+    for (let i = 0; i < v.length; i++) v[i] = dist[i] - lim;
+    const z = Math.min(maxD, d * cot);
+    for (const l of traceIso(v, W, H, 0)) rings.push({ closed: true, z, pts: rdp(l.map(R.toMm), 0.02) });
+    d += d < rMax ? sloped : flat;
+  }
+  // a last pass right down the middle so the deepest part comes to a sharp point
+  const dEnd = widest - 0.03, dLast = d - (d - sloped < rMax ? sloped : flat);
+  if (dEnd > dLast + 0.04) {
+    const lim = dEnd * res + 0.5;
+    for (let i = 0; i < v.length; i++) v[i] = dist[i] - lim;
+    for (const l of traceIso(v, W, H, 0)) if (l.length > 3) rings.push({ closed: true, z: Math.min(maxD, dEnd * cot), pts: rdp(l.map(R.toMm), 0.02) });
+  }
+  const flatArea = widest > rMax + 0.3;
+  return { paths: [...rings, ...open.map(p => ({ ...p, z: Math.min(maxD, 1) }))],
+           note: flatArea ? `wide parts reach the deepest setting (${fmt(maxD)} mm) and get a flat bottom; that takes longer with a V-bit.` : "" };
 }
 
 function orderPaths(paths) {
@@ -1419,6 +1464,7 @@ function refreshNow() {
     }
     if (items.some(i => i.opts.mode === "relief")) msgs.push(`Use wood at least ${fmt(lastJob.maxDepth + 3)} mm thick for the 3D carving.`);
     msgs.push(...lastJob.notes);
+    const mat = MATERIALS[$("material").value]; if (mat.note) msgs.push(mat.note);
     if (typeof boardWarnings === "function") msgs.push(...boardWarnings());
   } else $("estimate").textContent = "";
   $("boundsWarn").hidden = !msgs.length; $("boundsWarn").textContent = msgs.join(" ");
