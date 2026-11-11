@@ -97,7 +97,7 @@
 <body>
 <header>
   <h1>Easy Carve</h1>
-  <span class="hint">for Genmitsu PROVerXL 4030 · v0.9</span>
+  <span class="hint">for Genmitsu PROVerXL 4030 · v0.10</span>
   <a href="quick-guide.pdf" target="_blank" class="hint" style="margin-left:auto">Quick guide (PDF)</a>
   <button id="installBtn" hidden style="padding:6px 12px">Install on this computer</button>
   <span id="connBadge" style="margin-left:0">Machine not connected</span>
@@ -177,6 +177,7 @@
       <label><input type="radio" name="mode" value="pocket"><b>Carve out</b><span>Hollow out the shapes / letters</span></label>
       <label><input type="radio" name="mode" value="cut"><b>Cut out</b><span>Cut right through</span></label>
       <label><input type="radio" name="mode" value="relief"><b>3D raised</b><span>Rounded carving that stands up</span></label>
+      <label id="plugModeLabel" hidden><input type="radio" name="mode" value="inlayM"><b>Inlay plug</b><span>Cut from the second wood</span></label>
     </div>
     <label>Material <select id="material"></select></label>
     <label>Bit <select id="bit"></select></label>
@@ -194,6 +195,12 @@
         <option value="0.2">Quick (ridged)</option>
       </select></label>
     </div>
+    <div id="inlayRows" hidden>
+      <label>Plug start depth <span><input id="inS" type="number" step="0.1"> mm</span></label>
+      <label>Plug floor depth <span><input id="inP" type="number" step="0.1"> mm</span></label>
+      <div class="hint">Set by "Make an inlay". The plug is cut mirror-image; it gets glued in upside down.</div>
+    </div>
+    <button id="inlayBtn" style="width:100%;margin:4px 0 8px">🪵 Make an inlay from this piece…</button>
     <div id="vcHint" class="hint" hidden>The V-bit goes deeper where the shape is wider, giving sharp, chiselled edges like a sign-writer. Wide areas stop at the deepest setting and get a flat bottom.</div>
     <label id="thickRow" hidden>Material thickness <span><input id="thick" type="number" value="6" min="0.5" step="0.5"> mm</span></label>
     <label id="exactRow" class="check" hidden><input type="checkbox" id="exact" checked>
@@ -281,7 +288,7 @@
 
 <script>
 "use strict";
-const APP = "Easy Carve v0.9";
+const APP = "Easy Carve v0.10";
 const $ = id => document.getElementById(id);
 
 // ================= Presets =================
@@ -338,6 +345,9 @@ function showModeRows() {
   $("depthRow").hidden = cut || rel; $("thickRow").hidden = !cut; $("skinRow").hidden = !cut; $("exactRow").hidden = !cut;
   $("reliefRows").hidden = !rel;
   $("depthLabel").textContent = mode() === "vcarve" ? "Deepest it goes" : "How deep";
+  const plug = mode() === "inlayM";
+  $("inlayRows").hidden = !plug; $("plugModeLabel").hidden = !plug; $("inlayBtn").hidden = plug;
+  if (plug) $("depthRow").hidden = true;
   $("vcHint").hidden = mode() !== "vcarve";
 }
 document.querySelectorAll("input[name=mode]").forEach(r => r.onchange = () => {
@@ -881,9 +891,9 @@ $("useTextBtn").onclick = async () => { busy(true); await nextFrame(); makeTextD
 // ================= Layout: several pieces on one job =================
 let items = [], selId = null, itemSeq = 0, pendingAdd = false;
 const sel = () => items.find(i => i.id === selId) || null;
-const OPT_IDS = ["bit", "depth", "thick", "skin", "exact", "feed", "plunge", "stepdown", "rH", "rRound", "rBorder", "rLines", "rLineD", "rFinish"];
-const MODE_NAMES = { engrave: "Engrave", vcarve: "V-carve", pocket: "Carve out", cut: "Cut out", relief: "3D raised" };
-const MODE_ORDER = { engrave: 0, vcarve: 1, pocket: 2, relief: 3, cut: 9 };
+const OPT_IDS = ["bit", "depth", "thick", "skin", "exact", "feed", "plunge", "stepdown", "rH", "rRound", "rBorder", "rLines", "rLineD", "rFinish", "inS", "inP"];
+const MODE_NAMES = { engrave: "Engrave", vcarve: "V-carve", pocket: "Carve out", cut: "Cut out", relief: "3D raised", inlayM: "Inlay plug" };
+const MODE_ORDER = { engrave: 0, vcarve: 1, pocket: 2, relief: 3, cut: 9, inlayM: 10 };
 
 function readOpts() {
   const o = { mode: mode() };
@@ -1018,7 +1028,7 @@ function placedPaths(it) {
 // ----- toolpaths for one piece (in its own frame; moved into place when used) -----
 const tpCache = new Map();
 function toolpathsFor(it, S) {
-  const bitKey = it.opts.bit, key = JSON.stringify([localKey(it), S.mode, bitKey, it.opts.exact, S.vAngle, S.vMax]);
+  const bitKey = it.opts.bit, key = JSON.stringify([localKey(it), S.mode, bitKey, it.opts.exact, S.vAngle, S.vMax, S.inS, S.inP]);
   if (tpCache.has(key)) return tpCache.get(key);
   const placed = localPaths(it).paths, r = BITS[bitKey].dia / 2;
   let val = { paths: placed, note: "" };
@@ -1054,6 +1064,8 @@ function toolpathsFor(it, S) {
         ? "the shapes are thinner than the bit, so nothing can be carved out. Make it bigger, pick a smaller bit, or use V-carve."
         : pct >= 3 ? `about ${pct}% is narrower than the bit and won't be carved. Make it bigger or pick a smaller bit (or use V-carve).` : "" };
     }
+  } else if (S.mode === "inlayM") {
+    val = inlayMalePaths(closed, S, bitKey);
   } else if (S.mode === "vcarve" && typeof vcarvePaths === "function") {
     val = vcarvePaths(closed, open, S, bitKey);
   }
@@ -1079,7 +1091,7 @@ function vcarvePaths(closed, open, S, bitKey) {
     const lim = d * res + 0.5;
     for (let i = 0; i < v.length; i++) v[i] = dist[i] - lim;
     const z = Math.min(maxD, d * cot);
-    for (const l of traceIso(v, W, H, 0)) rings.push({ closed: true, z, pts: rdp(l.map(R.toMm), 0.02) });
+    for (const l of traceIso(v, W, H, 0)) rings.push({ closed: true, z, lvl: n, pts: rdp(l.map(R.toMm), 0.02) });
     d += d < rMax ? sloped : flat;
   }
   // a last pass right down the middle so the deepest part comes to a sharp point
@@ -1087,7 +1099,7 @@ function vcarvePaths(closed, open, S, bitKey) {
   if (dEnd > dLast + 0.04) {
     const lim = dEnd * res + 0.5;
     for (let i = 0; i < v.length; i++) v[i] = dist[i] - lim;
-    for (const l of traceIso(v, W, H, 0)) if (l.length > 3) rings.push({ closed: true, z: Math.min(maxD, dEnd * cot), pts: rdp(l.map(R.toMm), 0.02) });
+    for (const l of traceIso(v, W, H, 0)) if (l.length > 3) rings.push({ closed: true, z: Math.min(maxD, dEnd * cot), lvl: 9999, pts: rdp(l.map(R.toMm), 0.02) });
   }
   const flatArea = widest > rMax + 0.3;
   return { paths: [...rings, ...open.map(p => ({ ...p, z: Math.min(maxD, 1) }))],
@@ -1129,12 +1141,13 @@ function settingsFrom(o) {
   return {
     ...globalSettings(),
     mode: m, cut: m === "cut",
-    total: m === "relief" ? Math.max(0.5, +o.rH || 4) : m === "cut" ? (o.skin ? Math.max(0.1, thick - SKIN) : thick + 0.2) : (+o.depth || 0),
+    total: m === "inlayM" ? Math.max(+o.inP || 5.5, 0.5) : m === "relief" ? Math.max(0.5, +o.rH || 4) : m === "cut" ? (o.skin ? Math.max(0.1, thick - SKIN) : thick + 0.2) : (+o.depth || 0),
     feed: Math.max(10, +o.feed || 0), plunge: Math.max(10, +o.plunge || 0), step: Math.max(0.05, +o.stepdown || 0),
     reliefH: Math.max(0.5, +o.rH || 4), round: Math.max(0, +o.rRound || 0),
     border: Math.max(3, +o.rBorder || 8), lines: !!o.rLines,
     lineD: Math.max(0, +o.rLineD || 0), finish: +o.rFinish || 0.12,
     vAngle: BITS[o.bit] && BITS[o.bit].angle || 60, vMax: +o.depth || 3,
+    inS: +o.inS || 4, inP: +o.inP || 5.5,
   };
 }
 function settings() { return settingsFrom(readOpts()); }
@@ -1180,7 +1193,8 @@ function reliefModel(placed, S, bitKey, lkey) {
 
 // raster toolpaths that follow a height map with a ball-nose (or V) bit, plus roughing layers and a shaded preview
 function heightmapJob(surf, W, H, res, fx0, fy1, area, bitKey, S, floorZ) {
-  const bit = BITS[bitKey], r = bit.dia / 2, D = -floorZ;
+  const bit = BITS[bitKey], D = -floorZ;
+  const r = bit.vbit ? Math.max(bit.dia / 2, D * Math.tan((bit.angle || 60) * Math.PI / 360) + 0.1) : bit.dia / 2;   // a V-bit is as wide as its cone at full depth
   const rp = r * res, kr = Math.ceil(rp), step = Math.max(1, Math.round(rp / 6)), ker = [];
   const cone = bit.vbit ? 1 / Math.tan((bit.angle || 60) * Math.PI / 360) : 0;
   const prof = dd => bit.vbit ? dd * cone : r - Math.sqrt(Math.max(0, r * r - dd * dd));
@@ -1215,7 +1229,7 @@ function heightmapJob(surf, W, H, res, fx0, fy1, area, bitKey, S, floorZ) {
   const rough = [];
   const levels = Math.ceil(D / S.step - 1e-9) - 1;
   if (levels > 0) {
-    const coarse = rowsFor(Math.max(so, bit.dia * 0.45));
+    const coarse = rowsFor(Math.max(so, bit.vbit ? 1.0 : bit.dia * 0.45));
     for (let k = 1; k <= levels; k++) {
       const lvl = -k * S.step;
       rough.push(coarse.map(rw => ({ y: rw.y, pts: rw.pts.map(([x, z]) => [x, Math.max(lvl, Math.min(0, z + 0.3))]) })));
@@ -1307,8 +1321,8 @@ function emitOp(op) {
   const notes = [], preview = [], rasters = [];
   for (const it of its) {
     const S = settingsFrom(it.opts);
-    if (S.mode === "relief" || S.mode === "inlayM") {
-      const M = S.mode === "relief" ? reliefModel(localPaths(it).paths, S, it.opts.bit, localKey(it)) : inlayMaleModel(it, S);
+    if (S.mode === "relief") {
+      const M = reliefModel(localPaths(it).paths, S, it.opts.bit, localKey(it));
       if (M.note) notes.push(`${it.name}: ${M.note}`);
       if (!M.rows.length) continue;
       g.push(`(${it.name})`);
@@ -1320,10 +1334,10 @@ function emitOp(op) {
     const tp = toolpathsFor(it, S);
     if (tp.note) notes.push(`${it.name}: ${tp.note}`);
     let paths;
-    if (S.mode === "vcarve") {
-      // V-carve: shallow rings first, so each ring only shaves a thin sliver and can be cut in one go
+    if (S.mode === "vcarve" || S.mode === "inlayM") {
+      // rings in order (shallow/near the edge first), so each ring only shaves a thin sliver and can be cut in one go
       const byZ = new Map();
-      for (const p of shift(tp.paths, it.x, it.y)) { const k = p.z == null ? 1e9 : Math.round(p.z * 1000); if (!byZ.has(k)) byZ.set(k, []); byZ.get(k).push(p); }
+      for (const p of shift(tp.paths, it.x, it.y)) { const k = p.lvl != null ? p.lvl : 1e9; if (!byZ.has(k)) byZ.set(k, []); byZ.get(k).push(p); }
       paths = [...byZ.keys()].sort((a, b) => a - b).flatMap(k => orderPaths(byZ.get(k)).map(p => ({ ...p, one: k !== 1e9 })));
     } else paths = orderPaths(shift(tp.paths, it.x, it.y));
     g.push(`(${it.name})`);
@@ -1336,8 +1350,8 @@ function emitOp(op) {
 
 function buildJob() {
   const groups = new Map();
-  for (const it of items) { const k = it.opts.bit; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(it); }
-  let ops = [...groups.entries()].map(([bit, its]) => ({ bit, items: its, last: Math.max(...its.map(i => MODE_ORDER[i.opts.mode] ?? 5)) }));
+  for (const it of items) { const k = it.opts.bit + (it.opts.mode === "inlayM" ? "|plug" : ""); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(it); }
+  let ops = [...groups.entries()].map(([k, its]) => ({ bit: k.split("|")[0], plug: k.endsWith("|plug"), items: its, last: Math.max(...its.map(i => MODE_ORDER[i.opts.mode] ?? 5)) }));
   ops.sort((a, b) => a.last - b.last);                    // anything that cuts pieces free goes last
   ops = ops.map(op => ({ ...op, ...emitOp(op) }));
   return {
@@ -1467,6 +1481,7 @@ function refreshNow() {
     $("estimate").textContent = `About ${m < 60 ? m + " min" : Math.floor(m / 60) + " h " + (m % 60) + " min"} in total` +
       (lastJob.ops.length > 1 ? ` · ${lastJob.ops.length} bits (it will stop for a bit change)` : "");
     const [x0, y0, x1, y1] = jobBounds(false);
+    if (items.some(i => i.opts.mode === "inlayM")) msgs.push("Inlay: the plug (shown on the right, mirror-image) is cut from a second piece of wood in its own step. Before gluing, saw the plug wood off just outside the cut band so it can sit down into the pocket. Glue it in upside down, clamp overnight, then cut or sand its back off flush.");
     if (x0 < -0.01 || y0 < -0.01) msgs.push("Part of the job is left of or in front of the start corner. Move it in a bit.");
     if (x1 > BED.w || y1 > BED.h) msgs.push(`The job goes past the machine's ${BED.w} × ${BED.h} mm area. Make it smaller or move it.`);
     for (const it of items) {
@@ -1494,7 +1509,7 @@ function renderOps() {
     const l = document.createElement("label"); l.className = "check";
     const r = document.createElement("input"); r.type = "radio"; r.name = "op"; r.checked = i === opIndex; r.onchange = () => { opIndex = i; };
     const s = document.createElement("span");
-    s.innerHTML = `<b>Step ${i + 1}: ${BITS[op.bit].name}</b><br><small></small>`;
+    s.innerHTML = `<b>Step ${i + 1}: ${BITS[op.bit].name}${op.plug ? " – on the SECOND piece of wood" : ""}</b><br><small></small>`;
     s.querySelector("small").textContent = `${op.items.map(it => it.name).join(", ")} · about ${Math.ceil(op.minutes)} min`;
     l.append(r, s); $("opsList").append(l);
   });
@@ -1537,6 +1552,91 @@ $("copiesBtn").onclick = () => {
     }, "main"]]);
   $("wizBody").querySelector("b").textContent = it.name;
 };
+
+// ================= Inlays: V-carved pocket + matching mirrored plug =================
+// Pocket (main board): V-carve limited to depth Df.
+// Plug (second wood, mirrored): surface z = clamp(-S - sd*cot, -P, 0), sd = signed distance from the edge (+ outside).
+// Flipped into the pocket, its sloped sides meet the pocket's sides exactly; its top sits Df - S above the pocket floor
+// (glue room) and its background floor stays P - S above the board (so it can't bottom out before the sides bind).
+function inlayMaleModel(it, S) {
+  const bitKey = it.opts.bit, bit = BITS[bitKey];
+  const key = JSON.stringify(["inlayM", localKey(it), bitKey, S.inS, S.inP, S.finish, S.step]);
+  if (reliefCache.has(key)) return reliefCache.get(key);
+  const closed = localPaths(it).paths.filter(p => p.closed);
+  if (!closed.length || !bit.vbit) {
+    const val = { note: !closed.length ? "an inlay needs closed shapes." : "the plug needs a V-bit.", rows: [], rough: [] };
+    reliefCache.set(key, val); return val;
+  }
+  const half = (bit.angle || 60) * Math.PI / 360, cot = 1 / Math.tan(half);
+  const Sd = S.inS, P = Math.max(S.inP, Sd + 0.2), margin = (P - Sd) * Math.tan(half) + 4;
+  let bx0 = Infinity, by0 = Infinity, bx1 = -Infinity, by1 = -Infinity;
+  for (const p of closed) for (const [x, y] of p.pts) { bx0 = Math.min(bx0, x); bx1 = Math.max(bx1, x); by0 = Math.min(by0, y); by1 = Math.max(by1, y); }
+  const res = Math.min(10, Math.max(3, Math.sqrt(2.5e6 / ((bx1 - bx0 + 2 * margin) * (by1 - by0 + 2 * margin)))));
+  const R = rasterize(closed, margin + 2, res), W = R.W, H = R.H;
+  const notIn = new Uint8Array(W * H); for (let i = 0; i < notIn.length; i++) notIn[i] = 1 - R.inside[i];
+  const dIn = edt(notIn, W, H), dOut = edt(R.inside, W, H), surf = new Float32Array(W * H);
+  for (let i = 0; i < surf.length; i++) {
+    const sd = R.inside[i] ? -(dIn[i] - 0.5) / res : (dOut[i] - 0.5) / res;
+    surf[i] = Math.max(-P, Math.min(0, -Sd - sd * cot));
+  }
+  const vS = { ...S, finish: S.finish, step: Math.max(S.step, 0.5) };
+  const val = heightmapJob(surf, W, H, res, R.x0, R.y1, [bx0 - margin, by0 - margin, bx1 + margin, by1 + margin], bitKey, vS, -P);
+  reliefCache.set(key, val);
+  return val;
+}
+
+// plug toolpaths: rings at growing distance outwards from the plug's top edge, each at the depth where the
+// V-bit's side lies exactly on the plug's sloped wall; then a flat band at the floor depth around it
+function inlayMalePaths(closed, S, bitKey) {
+  const bit = BITS[bitKey];
+  if (!bit.vbit) return { paths: [], note: "the plug needs a V-bit." };
+  if (!closed.length) return { paths: [], note: "an inlay needs closed shapes." };
+  const half = (bit.angle || 60) * Math.PI / 360, cot = 1 / Math.tan(half), tan = Math.tan(half);
+  const Sd = S.inS, P = Math.max(S.inP, Sd + 0.2), band = 4;
+  const L0 = -Sd * tan, L1 = (P - Sd) * tan, L2 = L1 + band;
+  const R = rasterize(closed, L2 + 2), W = R.W, H = R.H, res = R.res;
+  const notIn = new Uint8Array(W * H); for (let i = 0; i < notIn.length; i++) notIn[i] = 1 - R.inside[i];
+  const dIn = edt(notIn, W, H), dOut = edt(R.inside, W, H), sd = new Float32Array(W * H);
+  for (let i = 0; i < sd.length; i++) sd[i] = R.inside[i] ? -(dIn[i] - 0.5) : (dOut[i] - 0.5);
+  const rings = [], v = new Float32Array(W * H);
+  let L = L0 + 0.08, n = 0;
+  while (L <= L2 && n < 600) {
+    for (let i = 0; i < v.length; i++) v[i] = L * res - sd[i];
+    const z = Math.min(P, Math.max(0.05, Sd + L * cot));
+    for (const l of traceIso(v, W, H, 0)) if (l.length > 3) rings.push({ closed: true, z, lvl: n, pts: rdp(l.map(R.toMm), 0.02) });
+    L += L < L1 ? Math.max(0.12, Math.min(0.25, L1 / 12)) : 0.3; n++;
+  }
+  return { paths: rings, note: "" };
+}
+
+function makeInlay() {
+  const it = sel(); if (!it) return;
+  if (!localPaths(it).paths.some(p => p.closed)) return alert("An inlay needs a closed outline: a shape, text, a logo, or a drawing opened as 'cut out its shape'.");
+  wiz("Make an inlay", `<p>Easy Carve will make <b>two cuts</b>:</p>
+    <ol><li>a V-carved <b>pocket</b> in your main board, and</li>
+        <li>a mirror-image <b>plug</b> from a second, contrasting wood (e.g. walnut into maple).</li></ol>
+    <label>Pocket depth <span><input id="inDf" type="number" value="5" min="2" step="0.5"> mm</span></label>
+    <label>Glue room under the plug <span><input id="inGlue" type="number" value="1" min="0.3" step="0.1"> mm</span></label>
+    <label>Gap above the board <span><input id="inGap" type="number" value="1.5" min="0.5" step="0.1"> mm</span></label>
+    <p class="hint">Plug wood must be at least ${"<b id=inMin></b>"} thick. Both cuts use the same V-bit. After cutting: glue, press the plug in upside down, clamp overnight, then cut or sand the plug's back off flush.</p>`,
+    [["Cancel", wizClose], ["Make it", () => {
+      const Df = Math.max(1, +$("inDf").value || 5), glue = Math.max(0.2, +$("inGlue").value || 1), gap = Math.max(0.3, +$("inGap").value || 1.5);
+      const S = Df - glue, P = S + gap;
+      wizClose();
+      const bitKey = BITS[it.opts.bit].vbit ? it.opts.bit : "vbit";
+      it.opts = { ...it.opts, mode: "vcarve", bit: bitKey, depth: Df }; presetFor(it.opts);
+      it.name = it.name.replace(/^Pocket for /, "");
+      const b = itemBox(it);
+      const plug = { ...it, id: ++itemSeq, name: `Plug for ${it.name} (second wood)`, mirror: !it.mirror,
+                     opts: { ...it.opts, mode: "inlayM", inS: +S.toFixed(2), inP: +P.toFixed(2) }, x: b.x + b.w + 20, y: b.y };
+      it.name = `Pocket for ${it.name}`;
+      items.push(plug); selectItem(plug.id);
+    }, "main"]]);
+  const upd = () => { const Df = +$("inDf").value || 5, glue = +$("inGlue").value || 1, gap = +$("inGap").value || 1.5; $("inMin").textContent = `${fmt(Df - glue + gap + 3)} mm`; };
+  ["inDf", "inGlue", "inGap"].forEach(id => $(id).addEventListener("input", upd)); upd();
+}
+
+$("inlayBtn").onclick = () => makeInlay();
 
 // ================= Ready-made projects & jigsaw puzzles =================
 // outlines in mm (Y down, like a drawing)
@@ -2031,7 +2131,8 @@ $("startBtn").onclick = async () => {
   const J = buildJob(); if (!J.ops.length) return;
   if (opIndex >= J.ops.length) opIndex = 0;
   const op = J.ops[opIndex], multi = J.ops.length > 1, air = J.S.air;
-  const head = multi ? `STEP ${opIndex + 1} OF ${J.ops.length}: the ${BITS[op.bit].name} bit must be fitted.\n\n` : "";
+  const head = (multi ? `STEP ${opIndex + 1} OF ${J.ops.length}: the ${BITS[op.bit].name} bit must be fitted.\n\n` : "") +
+    (op.plug ? "INLAY PLUG: clamp the SECOND piece of wood (the plug wood) and set the start corner AND surface on it first.\n\n" : "");
   const ok = confirm(head + (air
     ? "TEST RUN IN THE AIR\n\nThe bit stays above the wood. Watch that it moves where you expect.\n\nStart?"
     : "Before cutting, check:\n\n• The wood is clamped down firmly\n• You set the start corner AND the surface\n• The bit is tight in the spindle\n• Safety glasses on, dust extraction on\n\nStart cutting?"));
@@ -2041,8 +2142,11 @@ $("startBtn").onclick = async () => {
     doneMsg: air ? "Test run finished. Untick the test box and press Start to cut for real." : null });
   if (done && multi && opIndex < J.ops.length - 1) {
     opIndex++; renderOps();
-    const msg = `Step ${opIndex} done. Next: switch the spindle off, change to the ${BITS[J.ops[opIndex].bit].name} bit, ` +
-      `then set the SURFACE again (touch plate or by eye). Don't change the start corner. Then press Start for step ${opIndex + 1}.`;
+    const nx = J.ops[opIndex];
+    const msg = nx.plug
+      ? `Step ${opIndex} done. Next is the inlay PLUG: take the board off, clamp the second piece of wood, fit the ${BITS[nx.bit].name} bit, set the start corner and surface on the new wood, then press Start for step ${opIndex + 1}.`
+      : `Step ${opIndex} done. Next: switch the spindle off, change to the ${BITS[nx.bit].name} bit, ` +
+        `then set the SURFACE again (touch plate or by eye). Don't change the start corner. Then press Start for step ${opIndex + 1}.`;
     $("progText").textContent = msg; alert(msg);
   }
 };
@@ -2246,7 +2350,7 @@ let installPrompt = null;
 window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installPrompt = e; $("installBtn").hidden = false; });
 $("installBtn").onclick = async () => { if (!installPrompt) return; installPrompt.prompt(); await installPrompt.userChoice; installPrompt = null; $("installBtn").hidden = true; };
 
-window.EasyCarve = { items: () => items, startProject, jigsawDesign, PROJECTS, buildJob, selectItem, addItem, shapeDesign, loadSvgText, makeGcode, makeTextDesign, setDesign, buildReport, explain, onLine, resumePlan, jobLines };
+window.EasyCarve = { items: () => items, makeInlay, inlayMaleModel, startProject, jigsawDesign, PROJECTS, buildJob, selectItem, addItem, shapeDesign, loadSvgText, makeGcode, makeTextDesign, setDesign, buildReport, explain, onLine, resumePlan, jobLines };
 </script>
 </body>
 </html>
