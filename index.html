@@ -21,7 +21,16 @@
   #connBadge.on { background: #dafbe1; color: var(--go); }
   main { display: grid; grid-template-columns: 430px 1fr; gap: 16px; padding: 16px; min-height: calc(100vh - 60px); }
   @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
-  .panel { display: flex; flex-direction: column; gap: 16px; }
+  .panel { display: flex; flex-direction: column; gap: 12px; position: sticky; top: 16px; max-height: calc(100vh - 92px); }
+  .panel > .step { display: none; overflow-y: auto; flex: 1; min-height: 0; }
+  .panel > .step.active { display: block; }
+  #menu { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 6px; }
+  #menu button { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px; font-size: 22px; border: none; background: none; border-radius: 9px; }
+  #menu button span { font-size: 13px; font-weight: 600; color: var(--muted); }
+  #menu button.sel { background: #eef4ff; box-shadow: inset 0 0 0 2px var(--accent); }
+  #menu button.sel span { color: var(--accent); }
+  #menu button .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--stop); display: inline-block; }
+  @media (max-width: 900px) { .panel { position: static; max-height: none; } }
   .step { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
   .step h2 { margin: 0 0 12px; font-size: 19px; display: flex; align-items: center; gap: 10px; }
   .num { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 16px; }
@@ -93,13 +102,15 @@
   .samples img { width: 100%; aspect-ratio: 1.41; object-fit: contain; background: #fff; border-radius: 6px; }
   #simDlg button.main { background: var(--accent); color: #fff; border: none; }
   #simCanvas { image-rendering: auto; }
+  .diaryEntry { border-top: 1px solid var(--line); padding: 8px 0; }
+  .diaryEntry textarea { font-size: 14px; margin: 4px 0; }
   #busy { position: fixed; inset: auto 20px 20px auto; background: #1d1d1f; color: #fff; padding: 8px 14px; border-radius: 8px; display: none; }
 </style>
 </head>
 <body>
 <header>
   <h1>Easy Carve</h1>
-  <span class="hint">for Genmitsu PROVerXL 4030 · v0.11</span>
+  <span class="hint">for Genmitsu PROVerXL 4030 · v1.1</span>
   <a href="quick-guide.pdf" target="_blank" class="hint" style="margin-left:auto">Quick guide (PDF)</a>
   <button id="installBtn" hidden style="padding:6px 12px">Install on this computer</button>
   <span id="connBadge" style="margin-left:0">Machine not connected</span>
@@ -107,8 +118,14 @@
 
 <main>
 <section class="panel">
+  <nav id="menu">
+    <button data-tab="design" class="sel">🎨<span>1 Design</span></button>
+    <button data-tab="cut">✂️<span>2 How to cut</span></button>
+    <button data-tab="machine">🛠️<span>3 Cut it</span></button>
+    <button data-tab="diary">📒<span>Diary</span></button>
+  </nav>
 
-  <div class="step">
+  <div class="step" id="tab-design">
     <h2><span class="num">1</span> Pick your design</h2>
     <select id="projectSel" style="width:100%;max-width:none;margin-bottom:10px;font-weight:600">
       <option value="">✨ Start from a ready-made project…</option>
@@ -121,6 +138,8 @@
 
     <div id="paneFile">
       <button id="openBtn" class="big">Open design…</button>
+      <button id="camBtn" style="width:100%;margin-top:6px">📷 Take a photo of a drawing</button>
+      <input type="file" id="camIn" accept="image/*" capture="environment" hidden>
       <input type="file" id="fileIn" accept=".svg,image/svg+xml,image/png,image/jpeg,image/bmp,image/gif,image/webp" hidden>
       <div class="hint">SVG drawings, or a picture/logo (PNG, JPG). Pictures work best as black on white.</div>
       <div id="samples" hidden>
@@ -177,9 +196,10 @@
       <div class="hint">Set the start corner on the front-left corner of the wood.</div>
       <div class="row"><button id="centreBtn">Centre the job on my wood</button></div>
     </details>
+    <button class="big nextBtn" data-next="cut" style="margin-top:12px">Next: 2 How to cut →</button>
   </div>
 
-  <div class="step">
+  <div class="step" id="tab-cut">
     <h2><span class="num">2</span> How to cut it <span id="cutFor" class="hint" style="font-weight:400"></span></h2>
     <div class="modes">
       <label><input type="radio" name="mode" value="engrave" checked><b>Engrave</b><span>Carve along the lines</span></label>
@@ -229,9 +249,10 @@
     <button id="previewBtn" class="big" style="background:#6e40c9;margin:6px 0" disabled>👀 Preview the finished piece</button>
     <div id="boundsWarn" class="warn" hidden></div>
     <button id="saveBtn" disabled>Save G-code file (to use in other software)</button>
+    <button class="big nextBtn" data-next="machine" style="margin-top:10px">Next: 3 Cut it →</button>
   </div>
 
-  <div class="step">
+  <div class="step" id="tab-machine">
     <h2><span class="num">3</span> Cut it</h2>
     <div id="noSerial" class="warn" hidden>This browser can't talk to the machine. Open this file in <b>Google Chrome</b> or <b>Microsoft Edge</b> on a computer.</div>
     <button id="connectBtn" class="big">Connect to machine</button>
@@ -267,6 +288,7 @@
     <progress id="prog" value="0" max="1"></progress>
     <div id="progText" class="hint"></div>
     <div class="hint">Keep this window open while it cuts. The screen is kept on automatically.</div>
+    <label class="check"><input type="checkbox" id="dingOn" checked><span>Chime and pop-up when a job finishes (so you can leave the room)</span></label>
 
     <details id="helpBox">
       <summary>Something wrong? Help &amp; machine info</summary>
@@ -276,6 +298,13 @@
       <details><summary>Machine messages</summary><div id="log"></div></details>
       <details><summary>What the error numbers mean</summary><div id="codeList" class="hint"></div></details>
     </details>
+  </div>
+
+  <div class="step" id="tab-diary">
+    <h2>📒 Job diary</h2>
+    <div class="row small"><button id="saveJobBtn">💾 Save this job to a file</button><button id="openJobBtn">📂 Open a saved job</button></div>
+    <input type="file" id="jobIn" accept=".easycarve,application/json" hidden>
+    <details open><summary>Jobs you've run</summary><div id="diaryList"></div></details>
   </div>
 
 </section>
@@ -307,11 +336,17 @@
   <div class="row"><button id="simReplay">▶ Play again</button><button id="simEnd">⏭ Jump to the end</button><button id="simView" class="main">Turn it round in 3D</button><button id="simClose">Close</button></div>
   <div id="simNote" class="hint">This is worked out from the real cutting instructions, with the real bit shapes.</div>
 </dialog>
+<dialog id="camDlg">
+  <h2>Take a photo of a drawing</h2>
+  <video id="camVideo" autoplay playsinline muted style="width:100%;border-radius:10px;background:#000"></video>
+  <p class="hint">Lay the drawing flat on a darker table, in good light. Fill most of the picture and hold steady. Easy Carve squares off the page for you.</p>
+  <div class="row"><button id="camCancel">Cancel</button><button id="camSnap" class="main" style="background:var(--accent);color:#fff;border:none">📸 Take picture</button></div>
+</dialog>
 <dialog id="wiz"><h2 id="wizTitle"></h2><div id="wizBody"></div><div class="row" id="wizBtns"></div></dialog>
 
 <script>
 "use strict";
-const APP = "Easy Carve v0.11";
+const APP = "Easy Carve v1.1";
 const $ = id => document.getElementById(id);
 
 // ================= Presets =================
@@ -1866,6 +1901,205 @@ $("simView").onclick = () => {
   else { show2d(); renderSim(simState, $("simCanvas")); }
 };
 
+// ================= Scanner: photo of a drawing -> squared-off page =================
+// find the bright page, take its four corners and warp it to a flat rectangle
+function straightenPage(img) {
+  const s = Math.min(1, 700 / Math.max(img.naturalWidth || img.width, img.naturalHeight || img.height));
+  const w = Math.round((img.naturalWidth || img.width) * s), h = Math.round((img.naturalHeight || img.height) * s);
+  const c = document.createElement("canvas"); c.width = w; c.height = h;
+  const g = c.getContext("2d", { willReadFrequently: true }); g.drawImage(img, 0, 0, w, h);
+  const d = g.getImageData(0, 0, w, h).data, lum = new Float32Array(w * h);
+  for (let i = 0; i < w * h; i++) lum[i] = (0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2]) / 255;
+  // paper = bright; threshold halfway between the dark background and the paper
+  const sorted = Float32Array.from(lum).sort(), lo = sorted[Math.floor(sorted.length * 0.05)], hi = sorted[Math.floor(sorted.length * 0.9)];
+  if (hi - lo < 0.15) return null;                                     // no clear page edge
+  const t = (lo + hi) / 2, mask = new Uint8Array(w * h);
+  const sm = boxBlur(lum, w, h, 3);
+  for (let i = 0; i < w * h; i++) mask[i] = sm[i] > t ? 1 : 0;
+  // biggest bright region
+  const lab = new Int32Array(w * h); let best = 0, bestN = 0, id = 0;
+  for (let s0 = 0; s0 < w * h; s0++) {
+    if (!mask[s0] || lab[s0]) continue;
+    id++; let n = 0; const st = [s0]; lab[s0] = id;
+    while (st.length) { const i = st.pop(); n++; const x = i % w;
+      for (const j of [i - 1, i + 1, i - w, i + w]) if (j >= 0 && j < w * h && Math.abs((j % w) - x) <= 1 && mask[j] && !lab[j]) { lab[j] = id; st.push(j); } }
+    if (n > bestN) { bestN = n; best = id; }
+  }
+  if (bestN < w * h * 0.25) return null;
+  // corners = extreme points of x+y and x-y
+  let tl, tr, br, bl, a = Infinity, b = -Infinity, cc = -Infinity, dd = Infinity;
+  for (let i = 0; i < w * h; i++) {
+    if (lab[i] !== best) continue;
+    const x = i % w, y = (i - x) / w;
+    if (x + y < a) { a = x + y; tl = [x, y]; } if (x + y > b) { b = x + y; br = [x, y]; }
+    if (x - y > cc) { cc = x - y; tr = [x, y]; } if (x - y < dd) { dd = x - y; bl = [x, y]; }
+  }
+  const touches = [tl, tr, br, bl].filter(([x, y]) => x <= 1 || y <= 1 || x >= w - 2 || y >= h - 2).length;
+  if (touches >= 3) return null;                                      // page fills the photo: nothing to straighten
+  const quad = [tl, tr, br, bl].map(([x, y]) => [x / s, y / s]);
+  const len = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1]);
+  const OW = Math.round(Math.max(len(quad[0], quad[1]), len(quad[3], quad[2]))), OH = Math.round(Math.max(len(quad[0], quad[3]), len(quad[1], quad[2])));
+  return warpQuad(img, quad, Math.min(OW, 2400), Math.min(OH, 2400));
+}
+// homography from the output rectangle to the photo's quad, sampled with bilinear filtering
+function warpQuad(img, quad, OW, OH) {
+  const src = document.createElement("canvas"); src.width = img.naturalWidth || img.width; src.height = img.naturalHeight || img.height;
+  const sg = src.getContext("2d", { willReadFrequently: true }); sg.drawImage(img, 0, 0);
+  const SW = src.width, SH = src.height, sd = sg.getImageData(0, 0, SW, SH).data;
+  const H = homography([[0, 0], [OW, 0], [OW, OH], [0, OH]], quad);
+  const out = document.createElement("canvas"); out.width = OW; out.height = OH;
+  const og = out.getContext("2d"), od = og.createImageData(OW, OH);
+  const m = Math.round(Math.min(OW, OH) * 0.015);                    // trim the page edge
+  for (let y = 0; y < OH; y++) for (let x = 0; x < OW; x++) {
+    const o = (y * OW + x) * 4;
+    if (x < m || y < m || x >= OW - m || y >= OH - m) { od.data[o] = od.data[o + 1] = od.data[o + 2] = 255; od.data[o + 3] = 255; continue; }
+    const zz = H[6] * x + H[7] * y + 1, u = (H[0] * x + H[1] * y + H[2]) / zz, v = (H[3] * x + H[4] * y + H[5]) / zz;
+    const x0 = Math.floor(u), y0 = Math.floor(v), fx = u - x0, fy = v - y0;
+    for (let ch = 0; ch < 3; ch++) {
+      const p = (xx, yy) => sd[(Math.min(SH - 1, Math.max(0, yy)) * SW + Math.min(SW - 1, Math.max(0, xx))) * 4 + ch];
+      od.data[o + ch] = (p(x0, y0) * (1 - fx) + p(x0 + 1, y0) * fx) * (1 - fy) + (p(x0, y0 + 1) * (1 - fx) + p(x0 + 1, y0 + 1) * fx) * fy;
+    }
+    od.data[o + 3] = 255;
+  }
+  og.putImageData(od, 0, 0);
+  return out;
+}
+function homography(from, to) {
+  const A = [], bv = [];
+  for (let i = 0; i < 4; i++) {
+    const [x, y] = from[i], [u, v] = to[i];
+    A.push([x, y, 1, 0, 0, 0, -u * x, -u * y]); bv.push(u);
+    A.push([0, 0, 0, x, y, 1, -v * x, -v * y]); bv.push(v);
+  }
+  for (let c = 0; c < 8; c++) {                                       // Gaussian elimination
+    let piv = c; for (let r = c + 1; r < 8; r++) if (Math.abs(A[r][c]) > Math.abs(A[piv][c])) piv = r;
+    [A[c], A[piv]] = [A[piv], A[c]]; [bv[c], bv[piv]] = [bv[piv], bv[c]];
+    for (let r = 0; r < 8; r++) if (r !== c) { const f = A[r][c] / A[c][c]; for (let k = c; k < 8; k++) A[r][k] -= f * A[c][k]; bv[r] -= f * bv[c]; }
+  }
+  return bv.map((v, i) => v / A[i][i]);
+}
+
+async function useCapturedImage(canvasOrImg, name) {
+  busy(true); await nextFrame();
+  try {
+    const straight = straightenPage(canvasOrImg) || canvasOrImg;
+    const blob = await new Promise(r => (straight.toBlob ? straight : (() => { const c = document.createElement("canvas"); c.width = straight.naturalWidth; c.height = straight.naturalHeight; c.getContext("2d").drawImage(straight, 0, 0); return c; })()).toBlob(r, "image/jpeg", 0.92));
+    busy(false);
+    await openFile(new File([blob], name, { type: "image/jpeg" }));
+  } catch (err) { busy(false); alert("Sorry, that photo couldn't be used: " + err.message); }
+}
+
+let camStream = null;
+async function openCamera() {
+  if (matchMedia("(pointer: coarse)").matches || !navigator.mediaDevices?.getUserMedia) return $("camIn").click();   // phones: their own camera app
+  try { camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } } }); }
+  catch { return alert("The camera couldn't be opened. Check a webcam is plugged in and allowed for this site, or use 'Open design' with a photo instead."); }
+  $("camVideo").srcObject = camStream; $("camDlg").showModal();
+}
+function closeCamera() { if (camStream) camStream.getTracks().forEach(t => t.stop()); camStream = null; $("camDlg").close(); }
+
+// ================= Job finished alert =================
+let audioCtx = null;
+function primeSound() { try { audioCtx = audioCtx || new AudioContext(); audioCtx.resume(); } catch {} }
+function chime() {
+  if (!audioCtx) return;
+  [0, 0.25, 0.5].forEach((t, i) => {
+    const o = audioCtx.createOscillator(), gn = audioCtx.createGain();
+    o.frequency.value = [660, 880, 1100][i]; o.connect(gn); gn.connect(audioCtx.destination);
+    const t0 = audioCtx.currentTime + t; gn.gain.setValueAtTime(0.0001, t0); gn.gain.exponentialRampToValueAtTime(0.4, t0 + 0.02); gn.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.6);
+    o.start(t0); o.stop(t0 + 0.65);
+  });
+}
+let titleTimer = null;
+function announce(ok, what) {
+  if (!$("dingOn").checked) return;
+  chime(); setTimeout(chime, 1500);
+  const msg = ok ? `✅ Finished: ${what}` : `⚠️ Stopped: ${what}`;
+  try { if ("Notification" in window && Notification.permission === "granted") new Notification("Easy Carve", { body: msg, icon: "icon-192.png" }); } catch {}
+  clearInterval(titleTimer); let on = false; const base = document.title;
+  titleTimer = setInterval(() => { document.title = (on = !on) ? msg : base; }, 900);
+  const stop = () => { clearInterval(titleTimer); document.title = base; window.removeEventListener("focus", stop); document.removeEventListener("pointerdown", stop); };
+  window.addEventListener("focus", stop); document.addEventListener("pointerdown", stop);
+}
+
+// ================= Saving jobs & the job diary =================
+function serializeJob() {
+  return { app: APP, v: 1, material: $("material").value, board: { ...board },
+    items: items.map(it => ({ name: it.name, w: it.w, rot: it.rot, mirror: it.mirror, x: it.x, y: it.y, opts: { ...it.opts },
+      design: { name: it.design.name, w: it.design.w, h: it.design.h, naturalMm: it.design.naturalMm, isText: !!it.design.isText,
+                paths: it.design.paths.map(p => ({ closed: p.closed, pts: p.pts })) } })) };
+}
+function loadJob(o) {
+  if (!o || !Array.isArray(o.items)) throw new Error("That isn't an Easy Carve job file.");
+  items = []; const byKey = new Map();
+  for (const s of o.items) {
+    const k = JSON.stringify([s.design.name, s.design.w, s.design.h, s.design.paths.length]);
+    if (!byKey.has(k)) byKey.set(k, { ...s.design, id: ++designSeq });
+    items.push({ ...s, id: ++itemSeq, design: byKey.get(k), opts: { ...s.opts } });
+  }
+  if (o.material && MATERIALS[o.material]) $("material").value = o.material;
+  if (o.board) { $("boardOn").checked = !!o.board.on; $("boardW").value = o.board.w; $("boardH").value = o.board.h; $("boardT").value = o.board.t; readBoard(); }
+  selectItem(items.length ? items[items.length - 1].id : null);
+}
+$("saveJobBtn").onclick = () => { if (!items.length) return alert("There's nothing on the job yet.");
+  download(`${(items[0].name || "job").replace(/[^\w ]+/g, "").trim().slice(0, 30) || "job"}.easycarve`, JSON.stringify(serializeJob())); };
+$("openJobBtn").onclick = () => $("jobIn").click();
+$("jobIn").onchange = async e => { const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+  try { if (items.length && !confirm("Open this job? The pieces you have now will be cleared.")) return; loadJob(JSON.parse(await f.text())); }
+  catch (err) { alert("Sorry, that file couldn't be opened: " + err.message); } };
+
+const DIARY_KEY = "easyCarve.diary";
+function diaryLoad() { try { return JSON.parse(localStorage.getItem(DIARY_KEY) || "[]"); } catch { return []; } }
+function diarySave(list) {
+  for (let keep = list.length; keep >= 0; keep--) {
+    try { list.forEach((e, i) => { if (i >= keep) delete e.job; }); localStorage.setItem(DIARY_KEY, JSON.stringify(list.slice(0, 60))); return; }
+    catch { /* too big: drop saved layouts from older entries and try again */ }
+  }
+}
+function diaryStart(J, op, stepNo) {
+  const list = diaryLoad();
+  const e = { id: Date.now(), when: new Date().toISOString(), title: op.items.map(i => i.name).join(", ").slice(0, 120),
+    step: J.ops.length > 1 ? `step ${stepNo} of ${J.ops.length}` : "", bit: BITS[op.bit].name, material: MATERIALS[$("material").value].name,
+    est: Math.round(op.minutes), took: null, result: "running", notes: "", air: J.S.air };
+  const job = serializeJob(); if (JSON.stringify(job).length < 600000) e.job = job;
+  list.unshift(e); diarySave(list); renderDiary();
+  return e.id;
+}
+function diaryEnd(id, ok, startedAt) {
+  const list = diaryLoad(), e = list.find(x => x.id === id); if (!e) return;
+  e.took = Math.round((Date.now() - startedAt) / 60000); e.result = ok ? "finished" : "stopped";
+  diarySave(list); renderDiary();
+}
+function renderDiary() {
+  const list = diaryLoad(), box = $("diaryList"); box.innerHTML = "";
+  if (!list.length) { box.innerHTML = '<p class="hint">Nothing yet – jobs are added here when you press Start.</p>'; return; }
+  for (const e of list.slice(0, 40)) {
+    const div = document.createElement("div"); div.className = "diaryEntry";
+    const head = document.createElement("div");
+    const d = new Date(e.when);
+    head.innerHTML = `<b></b><br><small></small>`;
+    head.querySelector("b").textContent = `${e.result === "finished" ? "✅" : e.result === "stopped" ? "⚠️" : "⏳"} ${e.title}${e.air ? " (test run)" : ""}`;
+    head.querySelector("small").textContent = `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · ${e.material} · ${e.bit}${e.step ? " · " + e.step : ""} · estimate ${e.est} min${e.took != null ? `, took ${e.took} min` : ""}`;
+    const notes = document.createElement("textarea"); notes.rows = 1; notes.placeholder = "Notes: how did it go? (e.g. 'go slower on oak')"; notes.value = e.notes || "";
+    notes.onchange = () => { const l = diaryLoad(), x = l.find(y => y.id === e.id); if (x) { x.notes = notes.value; diarySave(l); } };
+    const row = document.createElement("div"); row.className = "row small";
+    if (e.job) { const again = document.createElement("button"); again.textContent = "Do this again"; again.onclick = () => { if (!items.length || confirm("Load this job? The pieces you have now will be cleared.")) loadJob(e.job); }; row.append(again); }
+    const del = document.createElement("button"); del.textContent = "Delete"; del.onclick = () => { diarySave(diaryLoad().filter(x => x.id !== e.id)); renderDiary(); }; row.append(del);
+    div.append(head, notes, row); box.append(div);
+  }
+}
+
+$("camBtn").onclick = () => openCamera();
+$("camIn").onchange = async e => { const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+  try { const img = await loadImage(f); await useCapturedImage(img, "Photo " + new Date().toLocaleDateString()); } catch (err) { alert(err.message); } };
+$("camCancel").onclick = () => closeCamera();
+$("camSnap").onclick = async () => {
+  const v = $("camVideo"), c = document.createElement("canvas"); c.width = v.videoWidth; c.height = v.videoHeight;
+  c.getContext("2d").drawImage(v, 0, 0); closeCamera();
+  await useCapturedImage(c, "Photo " + new Date().toLocaleDateString());
+};
+renderDiary();
+
 // ================= Ready-made projects & jigsaw puzzles =================
 // outlines in mm (Y down, like a drawing)
 const G = {
@@ -2052,6 +2286,7 @@ function explain(kind, n) {
   return t ? { what: t[0], fix: t[1] } : { what: `Unknown ${kind} ${n}.`, fix: "Press Copy report and send it for help." };
 }
 function showProblem(kind, n, context) {
+  if (typeof showTab === "function") showTab("machine");
   const e = explain(kind, n);
   diag.problems.push(`${new Date().toLocaleTimeString()} ${kind}:${n} ${e.what}${context ? " [" + context + "]" : ""}`);
   $("errBox").hidden = false; $("errBox").innerHTML = "";
@@ -2366,9 +2601,14 @@ $("startBtn").onclick = async () => {
     ? "TEST RUN IN THE AIR\n\nThe bit stays above the wood. Watch that it moves where you expect.\n\nStart?"
     : "Before cutting, check:\n\n• The wood is clamped down firmly\n• You set the start corner AND the surface\n• The bit is tight in the spindle\n• Safety glasses on, dust extraction on\n\nStart cutting?"));
   if (!ok) return;
+  primeSound();
+  try { if ("Notification" in window && Notification.permission === "default") Notification.requestPermission(); } catch {}
+  const diaryId = diaryStart(J, op, opIndex + 1), startedAt = Date.now();
   const done = await runJob(jobLines(op.text), { name: op.items.map(i => i.name).join(", "), minutes: op.minutes,
     plunge: settingsFrom(op.items[0].opts).plunge,
     doneMsg: air ? "Test run finished. Untick the test box and press Start to cut for real." : null });
+  diaryEnd(diaryId, done, startedAt);
+  announce(done, op.items.map(i => i.name).join(", "));
   if (done && multi && opIndex < J.ops.length - 1) {
     opIndex++; renderOps();
     const nx = J.ops[opIndex];
@@ -2384,7 +2624,9 @@ $("resumeBtn").onclick = async () => {
   if (!lastRun || lastRun.done) return;
   const k = Math.max(5, lastRun.acked - 25);   // go back a little: the last few moves may not have been cut
   if (!confirm(`Carry on from ${Math.round(k / lastRun.lines.length * 100)}%?\n\nThe bit will lift, move to where it stopped (a little before), and carry on cutting.\n\nCheck the start corner and surface haven't changed.`)) return;
-  await runJob(lastRun.lines, lastRun.meta, k);
+  primeSound();
+  const done = await runJob(lastRun.lines, lastRun.meta, k);
+  announce(done, lastRun.meta.name);
 };
 
 $("pauseBtn").onclick = async () => {
@@ -2513,7 +2755,7 @@ $("wizResume").onclick = () => wizSquareCut();
 
 // ----- remember settings between visits -----
 const KEEP = ["material", "bit", "depth", "thick", "skin", "exact", "feed", "plunge", "stepdown", "spindle", "safe", "rH", "rRound",
-              "rBorder", "rLines", "rLineD", "rFinish", "plateT", "boardOn", "boardW", "boardH", "boardT", "width", "offX", "offY", "detail", "imgKind", "fontSel", "boldIn"];
+              "rBorder", "rLines", "rLineD", "rFinish", "plateT", "boardOn", "boardW", "boardH", "boardT", "dingOn", "width", "offX", "offY", "detail", "imgKind", "fontSel", "boldIn"];
 function saveSettings() {
   try {
     const o = { mode: mode() };
@@ -2580,7 +2822,18 @@ let installPrompt = null;
 window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installPrompt = e; $("installBtn").hidden = false; });
 $("installBtn").onclick = async () => { if (!installPrompt) return; installPrompt.prompt(); await installPrompt.userChoice; installPrompt = null; $("installBtn").hidden = true; };
 
-window.EasyCarve = { items: () => items, sim: () => simState, simulateJob, openPreview, finishSim, centreOnBoard, board, makeInlay, inlayMaleModel, startProject, jigsawDesign, PROJECTS, buildJob, selectItem, addItem, shapeDesign, loadSvgText, makeGcode, makeTextDesign, setDesign, buildReport, explain, onLine, resumePlan, jobLines };
+// ----- menu tabs -----
+function showTab(name) {
+  document.querySelectorAll(".panel > .step").forEach(el => el.classList.toggle("active", el.id === "tab-" + name));
+  document.querySelectorAll("#menu button").forEach(b => b.classList.toggle("sel", b.dataset.tab === name));
+  try { localStorage.setItem("easyCarve.tab", name); } catch {}
+}
+document.querySelectorAll("#menu button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
+document.querySelectorAll(".nextBtn").forEach(b => b.onclick = () => showTab(b.dataset.next));
+let startTab = "design"; try { startTab = localStorage.getItem("easyCarve.tab") || "design"; } catch {}
+showTab($("tab-" + startTab) ? startTab : "design");
+
+window.EasyCarve = { items: () => items, showTab, straightenPage, serializeJob, loadJob, diaryLoad, announce, sim: () => simState, simulateJob, openPreview, finishSim, centreOnBoard, board, makeInlay, inlayMaleModel, startProject, jigsawDesign, PROJECTS, buildJob, selectItem, addItem, shapeDesign, loadSvgText, makeGcode, makeTextDesign, setDesign, buildReport, explain, onLine, resumePlan, jobLines };
 </script>
 </body>
 </html>

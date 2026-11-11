@@ -2,6 +2,7 @@
 const { chromium } = require('playwright');
 (async () => {
   const b = await chromium.launch(); const p = await b.newPage({ viewport: { width: 1400, height: 950 } });
+  await p.addInitScript(() => document.addEventListener('DOMContentLoaded', () => { const st = document.createElement('style'); st.textContent = '.panel > .step { display: block !important; }'; document.head.append(st); }));  // tests: show every tab at once
   const errs = []; p.on('pageerror', e => errs.push(e.message)); p.on('dialog', d => d.accept());
   await p.goto('file://' + __dirname + '/../index.html');
   await p.evaluate(() => localStorage.clear()); await p.reload();
@@ -42,7 +43,7 @@ const { chromium } = require('playwright');
   await p.click('#inlayBtn'); await p.click('#wizBtns >> text=Make it'); await p.waitForTimeout(4000);
   console.log('hare inlay steps:', await p.evaluate(() => EasyCarve.buildJob().ops.map(o => `${o.bit}${o.plug ? ' (plug wood)' : ''}: ${Math.ceil(o.minutes)} min`)));
   await p.check('#zoom'); await p.waitForTimeout(500);
-  await p.locator('.view').screenshot({ path: __dirname + '/inlay-hare.png' });
+  await p.locator('.view').screenshot({ path: '/tmp/inlay-hare.png' });
   console.log('warning:', (await p.textContent('#boundsWarn')).slice(0, 120));
   console.log('errors', errs); await b.close();
 })();

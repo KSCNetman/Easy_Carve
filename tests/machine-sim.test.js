@@ -40,6 +40,7 @@ const { chromium } = require('playwright');
     Object.defineProperty(navigator, 'serial', { value: { requestPort: async () => new Port(), addEventListener() {} } });
   });
   const p = await ctx.newPage();
+  await p.addInitScript(() => document.addEventListener('DOMContentLoaded', () => { const st = document.createElement('style'); st.textContent = '.panel > .step { display: block !important; }'; document.head.append(st); }));  // tests: show every tab at once
   const errs = []; p.on('pageerror', e => errs.push(e.message)); p.on('dialog', d => d.accept());
   await p.goto('file://' + __dirname + '/../index.html');
   const sim = () => p.evaluate(() => ({ maxRx: __sim.maxRx, n: __sim.lines.length, resets: __sim.resets }));
@@ -83,7 +84,7 @@ const { chromium } = require('playwright');
   await p.click('#wizBtns >> text=Move it'); await p.waitForTimeout(1800); await p.click('#wizBtns >> text=Yes');
   await p.click('#wizBtns >> text=Move it'); await p.waitForTimeout(1800); await p.click('#wizBtns >> text=Yes');
   console.log('5. wizard says:', (await p.textContent('#wizBody')).replace(/\s+/g, ' ').slice(0, 70));
-  await p.screenshot({ path: __dirname + '/wizard.png' });
+  await p.screenshot({ path: '/tmp/wizard.png' });
   await p.click('#wizBtns >> text=Fix it'); await p.waitForTimeout(1500);
   console.log('   settings now $3=', await p.evaluate(() => __sim.settings[3]), '$23=', await p.evaluate(() => __sim.settings[23]), '| dialog:', await p.textContent('#wizTitle'));
   await p.click('#wizBtns >> text=Test again');
