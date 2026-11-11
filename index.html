@@ -97,7 +97,7 @@
 <body>
 <header>
   <h1>Easy Carve</h1>
-  <span class="hint">for Genmitsu PROVerXL 4030 · v0.8</span>
+  <span class="hint">for Genmitsu PROVerXL 4030 · v0.9</span>
   <a href="quick-guide.pdf" target="_blank" class="hint" style="margin-left:auto">Quick guide (PDF)</a>
   <button id="installBtn" hidden style="padding:6px 12px">Install on this computer</button>
   <span id="connBadge" style="margin-left:0">Machine not connected</span>
@@ -108,6 +108,13 @@
 
   <div class="step">
     <h2><span class="num">1</span> Pick your design</h2>
+    <select id="projectSel" style="width:100%;max-width:none;margin-bottom:10px;font-weight:600">
+      <option value="">✨ Start from a ready-made project…</option>
+      <option value="houseSign">House sign</option><option value="plaque">Name plaque</option>
+      <option value="coasters">Coaster set (4)</option><option value="board">Chopping board with a name</option>
+      <option value="ornament">Christmas tree ornament</option><option value="bookmark">Bookmark</option>
+      <option value="keyrings">Keyrings (4)</option>
+    </select>
     <div class="tabs"><button id="tabFile" class="sel">Open a file</button><button id="tabText">Type some text</button></div>
 
     <div id="paneFile">
@@ -150,7 +157,8 @@
         <button id="addDesignBtn">＋ Picture / file</button><button id="addTextBtn">＋ Text</button>
         <select id="addShapeSel"><option value="">＋ Shape…</option><option value="rect">Rectangle</option><option value="round">Rounded rectangle</option>
           <option value="circle">Circle</option><option value="oval">Oval</option><option value="arch">Arched sign</option><option value="heart">Heart</option>
-          <option value="star">Star</option><option value="tree">Christmas tree</option><option value="tag">Tag / bookmark</option><option value="frame">Border frame</option></select>
+          <option value="star">Star</option><option value="tree">Christmas tree</option><option value="tag">Tag / bookmark</option><option value="frame">Border frame</option>
+          <option value="jigsaw">🧩 Jigsaw puzzle over the selected piece</option></select>
       </div>
       <div class="row small"><button id="dupBtn">Duplicate</button><button id="copiesBtn">Copies…</button><button id="delBtn">Remove</button></div>
     </div>
@@ -273,7 +281,7 @@
 
 <script>
 "use strict";
-const APP = "Easy Carve v0.8";
+const APP = "Easy Carve v0.9";
 const $ = id => document.getElementById(id);
 
 // ================= Presets =================
@@ -1241,7 +1249,7 @@ function emitPaths(g, paths, S, Z, dia) {
   paths.forEach((p, idx) => {
     let pts = p.pts.slice();
     const depth = p.z != null ? p.z : S.total;
-    const passes = Math.max(1, Math.ceil(depth / S.step - 1e-9));
+    const passes = p.one ? 1 : Math.max(1, Math.ceil(depth / S.step - 1e-9));
     g.push(`G0 X${fmt(pts[0][0])} Y${fmt(pts[0][1])}`);
     travel += Math.hypot(pts[0][0] - at[0], pts[0][1] - at[1]);
     g.push(`G0 Z${Z(0.5)}`);
@@ -1311,7 +1319,13 @@ function emitOp(op) {
     }
     const tp = toolpathsFor(it, S);
     if (tp.note) notes.push(`${it.name}: ${tp.note}`);
-    const paths = orderPaths(shift(tp.paths, it.x, it.y));
+    let paths;
+    if (S.mode === "vcarve") {
+      // V-carve: shallow rings first, so each ring only shaves a thin sliver and can be cut in one go
+      const byZ = new Map();
+      for (const p of shift(tp.paths, it.x, it.y)) { const k = p.z == null ? 1e9 : Math.round(p.z * 1000); if (!byZ.has(k)) byZ.set(k, []); byZ.get(k).push(p); }
+      paths = [...byZ.keys()].sort((a, b) => a - b).flatMap(k => orderPaths(byZ.get(k)).map(p => ({ ...p, one: k !== 1e9 })));
+    } else paths = orderPaths(shift(tp.paths, it.x, it.y));
     g.push(`(${it.name})`);
     minutes += emitPaths(g, paths, S, Z, BITS[op.bit].dia);
     for (const p of paths) preview.push({ ...p, item: it.id });
@@ -1502,6 +1516,7 @@ $("addDesignBtn").onclick = () => { pendingAdd = true; $("tabFile").click(); $("
 $("addTextBtn").onclick = () => { pendingAdd = true; $("tabText").click(); $("textIn").focus(); $("textIn").select(); };
 $("addShapeSel").onchange = () => {
   const k = $("addShapeSel").value; $("addShapeSel").value = ""; if (!k) return;
+  if (k === "jigsaw") return addJigsaw();
   const d = shapeDesign(k); pendingAdd = true; setDesign(d, d.name);
   const it = sel(); if (it && k === "frame") { it.opts.mode = "engrave"; writeOpts(it.opts); }
   refresh();
@@ -1522,6 +1537,136 @@ $("copiesBtn").onclick = () => {
     }, "main"]]);
   $("wizBody").querySelector("b").textContent = it.name;
 };
+
+// ================= Ready-made projects & jigsaw puzzles =================
+// outlines in mm (Y down, like a drawing)
+const G = {
+  rr(w, h, r, ox = 0, oy = 0) {
+    const p = [], arc = (cx, cy, a0, a1) => { for (let i = 0; i <= 12; i++) { const a = a0 + (a1 - a0) * i / 12; p.push([ox + cx + r * Math.cos(a), oy + cy + r * Math.sin(a)]); } };
+    arc(w - r, r, -Math.PI / 2, 0); arc(w - r, h - r, 0, Math.PI / 2); arc(r, h - r, Math.PI / 2, Math.PI); arc(r, r, Math.PI, 1.5 * Math.PI);
+    p.push(p[0].slice()); return p;
+  },
+  oval(cx, cy, rx, ry, n = 90) { const p = []; for (let i = 0; i <= n; i++) { const a = i / n * 2 * Math.PI; p.push([cx + rx * Math.cos(a), cy + ry * Math.sin(a)]); } return p; },
+};
+const mkDesign = (raw, name) => Object.assign(normalize(raw, 1), { name });
+
+function textDesign(text, font = $("fontSel").value, bold = true) {
+  const f = `${bold ? "bold " : ""}200px "${font}", Arial, sans-serif`, lines = text.split("\n");
+  const c = document.createElement("canvas"), g = c.getContext("2d", { willReadFrequently: true });
+  g.font = f;
+  const lh = 240; c.width = Math.ceil(Math.max(...lines.map(l => g.measureText(l).width))) + 80; c.height = lines.length * lh + 80;
+  g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height);
+  g.font = f; g.fillStyle = "#000"; g.textBaseline = "top"; g.textAlign = "center";
+  lines.forEach((l, i) => g.fillText(l, c.width / 2, 40 + i * lh));
+  const d = normalize(traceCanvas(c, 0.5, false, 4), 40 / 200);
+  d.isText = true; d.name = `"${text.replace(/\n/g, " / ")}"`;
+  return d;
+}
+
+// add a piece with its own cutting settings; (cx, cy) = where its centre goes
+function putPiece(d, name, cx, cy, w, opts, rot = 0) {
+  const o = { ...readOpts(), skin: true, exact: true, ...opts }; presetFor(o);
+  const it = { id: ++itemSeq, name, design: d, w, rot, mirror: false, opts: o, x: 0, y: 0 };
+  const L = localPaths(it); it.x = Math.round((cx - L.bw / 2) * 2) / 2; it.y = Math.round((cy - L.bh / 2) * 2) / 2;
+  items.push(it); return it;
+}
+const CUT = (thick, bit = "flat3") => ({ mode: "cut", bit, thick, skin: true, exact: true });
+const VC = (depth, bit = "vbit") => ({ mode: "vcarve", bit, depth });
+
+const PROJECTS = {
+  houseSign: { name: "House sign", ask: "Words for the sign", text: "No. 12\nRose Cottage", build(t) {
+    const s = putPiece(shapeDesign("arch"), "Sign board", 140, 125, 250, CUT(18));
+    putPiece(textDesign(t), "Sign words", 140, 105, 190, VC(4)); return s; } },
+  plaque: { name: "Name plaque", ask: "Name", text: "Bethan", build(t) {
+    putPiece(mkDesign([G.rr(220, 90, 12)], "Plaque"), "Plaque", 125, 60, 220, CUT(12));
+    putPiece(mkDesign([G.rr(206, 76, 8)], "Border line"), "Border line", 125, 60, 206, { mode: "engrave", bit: "vbit", depth: 1.2 });
+    putPiece(textDesign(t), "Name", 125, 60, 160, VC(3.5)); } },
+  coasters: { name: "Coaster set (4)", ask: "Letter or short word for each coaster", text: "A", build(t) {
+    for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) {
+      const cx = 60 + i * 105, cy = 60 + j * 105;
+      putPiece(shapeDesign("circle"), `Coaster ${j * 2 + i + 1}`, cx, cy, 95, CUT(6));
+      putPiece(textDesign(t), `Coaster ${j * 2 + i + 1} letter`, cx, cy, Math.min(60, 22 * t.length + 18), VC(3));
+    } } },
+  board: { name: "Chopping board with a name", ask: "Name or words", text: "The Joneses", build(t) {
+    putPiece(mkDesign([G.rr(300, 190, 25), G.oval(268, 95, 9, 26)], "Board"), "Chopping board", 165, 110, 300, CUT(18));
+    putPiece(textDesign(t), "Board words", 150, 110, 170, VC(3)); } },
+  ornament: { name: "Christmas tree ornament", ask: "Name or year", text: "2026", build(t) {
+    const tree = shapeDesign("tree");
+    putPiece(mkDesign([...tree.paths.map(p => p.pts.map(([x, y]) => [x * 0.9, -y * 0.9])), G.oval(31.5, -67, 2.5, 2.5, 40)], "Tree"), "Tree ornament", 60, 55, 70, CUT(6));
+    putPiece(textDesign(t), "Tree words", 60, 40, 34, VC(2)); } },
+  bookmark: { name: "Bookmark", ask: "Words (they run along it)", text: "Happy reading", build(t) {
+    putPiece(shapeDesign("tag"), "Bookmark", 40, 75, 40, CUT(3));
+    putPiece(textDesign(t), "Bookmark words", 40, 68, 85, VC(1.5), 90); } },
+  keyrings: { name: "Keyrings (4)", ask: "Initials", text: "KJ", build(t) {
+    for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) {
+      const cx = 45 + i * 75, cy = 30 + j * 40;
+      putPiece(mkDesign([G.rr(60, 26, 8), G.oval(9, 13, 3, 3, 40)], "Keyring"), `Keyring ${j * 2 + i + 1}`, cx, cy, 60, CUT(6));
+      putPiece(textDesign(t), `Keyring ${j * 2 + i + 1} letters`, cx + 5, cy, 34, VC(2));
+    } } },
+};
+
+function startProject(key) {
+  const P = PROJECTS[key]; if (!P) return;
+  if (items.length && !confirm("Start a new job? The pieces you have now will be cleared.")) return;
+  wiz(P.name, `<label>${P.ask} <span></span></label><textarea id="projText" rows="2"></textarea>
+    <p class="hint">You can change sizes, move pieces and pick different bits afterwards. Press Enter for a new line.</p>`,
+    [["Cancel", wizClose], ["Make it", async () => {
+      const t = ($("projText").value || P.text).replace(/\s+$/, "");
+      wizClose(); busy(true); await nextFrame();
+      try { items = []; P.build(t); selectItem(items[items.length - 1].id); $("zoom").checked = true; }
+      catch (err) { alert("Sorry: " + err.message); }
+      busy(false);
+    }, "main"]]);
+  $("projText").value = P.text;
+}
+
+// ----- jigsaw puzzle cuts laid over a piece -----
+function jigsawDesign(W, H, nx, ny, seed = 7) {
+  let s = seed; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  // one edge from (0,0) to (L,0) with a knob on side `dir`, as points along it
+  const edge = (L, dir) => {
+    const j = () => (rnd() - 0.5) * 0.06;
+    const c = 0.5 + j(), r = 0.105 + j() / 3, neck = 0.07, h0 = 0.17 + j() / 2;
+    const pts = [[0, 0], [(c - 0.15) * L, j() * L * 0.3]];
+    const aL = Math.atan2(0.02 - h0, -neck), aR = Math.atan2(0.02 - h0, neck), aEnd = aR - 2 * Math.PI;   // round the far side of the knob
+    pts.push([(c - neck) * L, 0.02 * dir * L]);
+    for (let i = 0; i <= 24; i++) { const a = aL + (aEnd - aL) * i / 24; pts.push([(c + r * Math.cos(a)) * L, dir * (h0 + r * Math.sin(a)) * L]); }
+    pts.push([(c + neck) * L, 0.02 * dir * L], [(c + 0.15) * L, j() * L * 0.3], [L, 0]);
+    return pts;
+  };
+  const cw = W / nx, ch = H / ny, raw = [];
+  for (let k = 1; k < ny; k++) {                                       // across
+    const line = [];
+    for (let i = 0; i < nx; i++) for (const [u, v] of edge(cw, rnd() < 0.5 ? 1 : -1)) if (!(i && !u)) line.push([i * cw + u, k * ch + v]);
+    raw.push(line);
+  }
+  for (let k = 1; k < nx; k++) {                                       // front to back
+    const line = [];
+    for (let i = 0; i < ny; i++) for (const [u, v] of edge(ch, rnd() < 0.5 ? 1 : -1)) if (!(i && !u)) line.push([k * cw + v, i * ch + u]);
+    raw.push(line);
+  }
+  raw.push([[0, 0], [W, 0], [W, H], [0, H], [0, 0]]);
+  return Object.assign(normalize(raw, 1), { name: "Jigsaw cuts" });
+}
+
+function addJigsaw() {
+  const base = sel();
+  const b = base ? itemBox(base) : { x: 10, y: 10, w: 200, h: 150 };
+  wiz("Make it a jigsaw puzzle", `<p>${base ? "Puzzle cuts are laid over the selected piece." : "A puzzle the size below."}</p>
+    <label>Pieces across <span><input id="jzX" type="number" min="2" max="20" value="${Math.max(2, Math.round(b.w / 40))}"></span></label>
+    <label>Pieces back <span><input id="jzY" type="number" min="2" max="20" value="${Math.max(2, Math.round(b.h / 40))}"></span></label>
+    <label>Wood thickness <span><input id="jzT" type="number" min="2" step="0.5" value="4"> mm</span></label>
+    <p class="hint">Use 3–6 mm plywood and the 1 mm flat bit. The pieces stay held by a thin skin; snap them apart and sand the backs.</p>`,
+    [["Cancel", wizClose], ["Make the puzzle", () => {
+      const nx = Math.max(2, +$("jzX").value | 0), ny = Math.max(2, +$("jzY").value | 0), t = Math.max(1, +$("jzT").value || 4);
+      wizClose();
+      const it = putPiece(jigsawDesign(b.w, b.h, nx, ny, Date.now() % 100000), `Jigsaw (${nx * ny} pieces)`, b.x + b.w / 2, b.y + b.h / 2, b.w,
+        { mode: "cut", bit: "flat1", thick: t, skin: true, exact: false });
+      selectItem(it.id);
+    }, "main"]]);
+}
+
+$("projectSel").onchange = () => { const k = $("projectSel").value; $("projectSel").value = ""; if (k) startProject(k); };
 
 // ================= Machine error codes (GRBL 1.1) =================
 const GRBL_ERRORS = {
@@ -2101,7 +2246,7 @@ let installPrompt = null;
 window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installPrompt = e; $("installBtn").hidden = false; });
 $("installBtn").onclick = async () => { if (!installPrompt) return; installPrompt.prompt(); await installPrompt.userChoice; installPrompt = null; $("installBtn").hidden = true; };
 
-window.EasyCarve = { items: () => items, buildJob, selectItem, addItem, shapeDesign, loadSvgText, makeGcode, makeTextDesign, setDesign, buildReport, explain, onLine, resumePlan, jobLines };
+window.EasyCarve = { items: () => items, startProject, jigsawDesign, PROJECTS, buildJob, selectItem, addItem, shapeDesign, loadSvgText, makeGcode, makeTextDesign, setDesign, buildReport, explain, onLine, resumePlan, jobLines };
 </script>
 </body>
 </html>
