@@ -83,6 +83,11 @@
   #wizBtns button.no { background: var(--stop); color: #fff; border: none; }
   #wizBtns button.main { background: var(--accent); color: #fff; border: none; }
   .ok { background: #dafbe1; color: var(--go); padding: 8px 10px; border-radius: 8px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+  .chip { padding: 6px 10px; border-radius: 999px; font-size: 14px; }
+  .chip.sel { background: #eef4ff; border-color: var(--accent); font-weight: 600; }
+  .row.small button, .row.small select { padding: 7px 8px; font-size: 14px; }
+  canvas#cv { touch-action: none; cursor: grab; }
   .samples { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; }
   .samples button { padding: 6px; display: flex; flex-direction: column; gap: 4px; align-items: center; font-size: 15px; }
   .samples img { width: 100%; aspect-ratio: 1.41; object-fit: contain; background: #fff; border-radius: 6px; }
@@ -92,7 +97,7 @@
 <body>
 <header>
   <h1>Easy Carve</h1>
-  <span class="hint">for Genmitsu PROVerXL 4030 · v0.6</span>
+  <span class="hint">for Genmitsu PROVerXL 4030 · v0.7</span>
   <a href="quick-guide.pdf" target="_blank" class="hint" style="margin-left:auto">Quick guide (PDF)</a>
   <button id="installBtn" hidden style="padding:6px 12px">Install on this computer</button>
   <span id="connBadge" style="margin-left:0">Machine not connected</span>
@@ -138,14 +143,26 @@
     </div>
 
     <div id="fileName" class="hint"></div>
+    <div id="itemsBox" hidden>
+      <div class="hint" style="margin-top:8px"><b>Pieces on this job</b> (click one to change it, or drag it on the picture):</div>
+      <div id="itemList" class="chips"></div>
+      <div class="row small">
+        <button id="addDesignBtn">＋ Picture / file</button><button id="addTextBtn">＋ Text</button>
+        <select id="addShapeSel"><option value="">＋ Shape…</option><option value="rect">Rectangle</option><option value="round">Rounded rectangle</option>
+          <option value="circle">Circle</option><option value="oval">Oval</option><option value="arch">Arched sign</option><option value="heart">Heart</option>
+          <option value="star">Star</option><option value="tree">Christmas tree</option><option value="tag">Tag / bookmark</option><option value="frame">Border frame</option></select>
+      </div>
+      <div class="row small"><button id="dupBtn">Duplicate</button><button id="copiesBtn">Copies…</button><button id="delBtn">Remove</button></div>
+    </div>
     <label>How wide <span><input id="width" type="number" value="100" min="1" step="1"> mm</span></label>
     <div class="hint">Height: <b id="heightOut">–</b> mm (it keeps its shape)</div>
     <label>Gap from left edge <span><input id="offX" type="number" value="10" step="1"> mm</span></label>
     <label>Gap from front edge <span><input id="offY" type="number" value="10" step="1"> mm</span></label>
+    <label>Turn it <span><input id="rot" type="number" value="0" step="15"> °</span></label>
   </div>
 
   <div class="step">
-    <h2><span class="num">2</span> How to cut it</h2>
+    <h2><span class="num">2</span> How to cut it <span id="cutFor" class="hint" style="font-weight:400"></span></h2>
     <div class="modes">
       <label><input type="radio" name="mode" value="engrave" checked><b>Engrave</b><span>Carve along the lines</span></label>
       <label><input type="radio" name="mode" value="pocket"><b>Carve out</b><span>Hollow out the shapes / letters</span></label>
@@ -215,6 +232,7 @@
     <label class="check"><input type="checkbox" id="airRun">
       <span><b>Test run in the air.</b> Runs the whole job with the bit kept above the wood, to check it's in the right place.</span></label>
 
+    <div id="opsBox" class="warn" hidden><b>This job uses more than one bit.</b> Do one step at a time:<div id="opsList"></div></div>
     <div class="row"><button id="startBtn" class="big go" disabled>Start</button></div>
     <div id="resumeBox" class="warn" hidden><div id="resumeText"></div><div class="row"><button id="resumeBtn">Carry on from where it stopped</button></div></div>
     <div class="row"><button id="pauseBtn" disabled>Pause</button><button id="stopBtn" class="stop" disabled>STOP</button></div>
@@ -253,7 +271,7 @@
 
 <script>
 "use strict";
-const APP = "Easy Carve v0.6";
+const APP = "Easy Carve v0.7";
 const $ = id => document.getElementById(id);
 
 // ================= Presets =================
@@ -281,14 +299,19 @@ for (const [k, m] of Object.entries(MATERIALS)) $("material").add(new Option(m.n
 for (const [k, b] of Object.entries(BITS)) $("bit").add(new Option(b.name, k));
 for (const f of FONTS) { const o = new Option(f, f); o.style.fontFamily = `"${f}"`; $("fontSel").add(o); }
 
+function presetFor(o) {
+  const m = MATERIALS[$("material").value], b = BITS[o.bit] || BITS.flat3;
+  o.feed = Math.round(m.feed * b.feedMul / 10) * 10;
+  o.plunge = Math.round(m.plunge * b.feedMul / 10) * 10;
+  o.stepdown = +(m.step * b.stepMul).toFixed(2);
+}
 function applyPreset() {
-  const m = MATERIALS[$("material").value], b = BITS[$("bit").value];
-  $("feed").value = Math.round(m.feed * b.feedMul / 10) * 10;
-  $("plunge").value = Math.round(m.plunge * b.feedMul / 10) * 10;
-  $("stepdown").value = +(m.step * b.stepMul).toFixed(2);
+  const o = readOpts(); presetFor(o);
+  $("feed").value = o.feed; $("plunge").value = o.plunge; $("stepdown").value = o.stepdown;
+  if (typeof syncFromDom === "function") syncFromDom();
   refresh();
 }
-$("material").onchange = applyPreset;
+$("material").onchange = () => { if (typeof items !== "undefined") for (const it of items) presetFor(it.opts); applyPreset(); };
 $("bit").onchange = applyPreset;
 
 const mode = () => document.querySelector("input[name=mode]:checked").value;
@@ -305,12 +328,13 @@ document.querySelectorAll("input[name=mode]").forEach(r => r.onchange = () => {
   $("reliefRows").hidden = !rel;
   if (rel && !BITS[$("bit").value].ball) { $("bit").value = "ball3"; applyPreset(); return; }
   if (!rel && BITS[$("bit").value].ball) { $("bit").value = "flat3"; applyPreset(); return; }
-  refresh();
+  syncFromDom(); refresh();
 });
-["width", "offX", "offY", "depth", "thick", "skin", "exact", "rH", "rRound", "rBorder", "rLines", "rLineD", "rFinish", "feed", "plunge", "stepdown", "spindle", "safe", "airRun"]
-  .forEach(id => $(id).addEventListener("input", refresh));
+["width", "offX", "offY", "rot", "depth", "thick", "skin", "exact", "rH", "rRound", "rBorder", "rLines", "rLineD", "rFinish", "feed", "plunge", "stepdown", "spindle", "safe", "airRun"]
+  .forEach(id => $(id).addEventListener("input", () => { if (typeof syncFromDom === "function") syncFromDom(); refresh(); }));
 $("zoom").addEventListener("change", draw);
-$("rFinish").addEventListener("change", refresh);
+$("rFinish").addEventListener("change", () => { syncFromDom(); refresh(); });
+["skin", "exact", "rLines"].forEach(id => $(id).addEventListener("change", () => { syncFromDom(); refresh(); }));
 
 $("tabFile").onclick = () => { $("tabFile").classList.add("sel"); $("tabText").classList.remove("sel"); $("paneFile").hidden = false; $("paneText").hidden = true; };
 $("tabText").onclick = () => { $("tabText").classList.add("sel"); $("tabFile").classList.remove("sel"); $("paneText").hidden = false; $("paneFile").hidden = true; };
@@ -677,12 +701,6 @@ if (/^https?:$/.test(location.protocol)) {
   });
 }
 
-function setDesign(d, name) {
-  design = d; design.name = name;
-  if (d.naturalMm) $("width").value = Math.round(Math.min(380, Math.max(10, d.naturalMm)));
-  $("fileName").textContent = `${name} – ${d.paths.length} shape${d.paths.length === 1 ? "" : "s"}`;
-  refresh();
-}
 
 function loadSvgText(text) {
   const doc = new DOMParser().parseFromString(text, "image/svg+xml");
@@ -831,42 +849,173 @@ function makeTextDesign() {
   lines.forEach((l, i) => g.fillText(l, c.width / 2, 40 + i * lh));
   try {
     const d = normalize(traceCanvas(c, 0.5, false, 4), 40 / 200);   // 200px letters ≈ 40mm
+    d.isText = true;
+    if (!(sel() && sel().design.isText)) pendingAdd = true;
     setDesign(d, `"${text.replace(/\n/g, " / ")}" in ${$("fontSel").value}`);
     if (mode() === "engrave") document.querySelector("input[value=pocket]").click();
   } catch (err) { alert(err.message); }
 }
 $("useTextBtn").onclick = async () => { busy(true); await nextFrame(); makeTextDesign(); busy(false); };
 
-// ================= Toolpaths =================
-function placedPaths() {
-  if (!design) return [];
-  const s = (+$("width").value || 1) / design.w, ox = +$("offX").value || 0, oy = +$("offY").value || 0;
-  return design.paths.map(p => ({ closed: p.closed, pts: rdp(p.pts.map(([x, y]) => [ox + x * s, oy + y * s]), 0.02) }))
-                     .filter(p => p.pts.length > 1);
+// ================= Layout: several pieces on one job =================
+let items = [], selId = null, itemSeq = 0, pendingAdd = false;
+const sel = () => items.find(i => i.id === selId) || null;
+const OPT_IDS = ["bit", "depth", "thick", "skin", "exact", "feed", "plunge", "stepdown", "rH", "rRound", "rBorder", "rLines", "rLineD", "rFinish"];
+const MODE_NAMES = { engrave: "Engrave", vcarve: "V-carve", pocket: "Carve out", cut: "Cut out", relief: "3D raised" };
+const MODE_ORDER = { engrave: 0, vcarve: 1, pocket: 2, relief: 3, cut: 9 };
+
+function readOpts() {
+  const o = { mode: mode() };
+  for (const id of OPT_IDS) { const e = $(id); if (e) o[id] = e.type === "checkbox" ? e.checked : e.value; }
+  return o;
+}
+function writeOpts(o) {
+  for (const id of OPT_IDS) if (id in o && $(id)) { const e = $(id); if (e.type === "checkbox") e.checked = o[id]; else e.value = o[id]; }
+  const r = document.querySelector(`input[name=mode][value=${o.mode}]`); if (r) r.checked = true;
+  showModeRows();
+}
+function itemBox(it) { const L = localPaths(it); return { x: it.x, y: it.y, w: L.bw, h: L.bh }; }
+function writePos(it) {
+  $("width").value = +it.w.toFixed(1); $("offX").value = +it.x.toFixed(1); $("offY").value = +it.y.toFixed(1); $("rot").value = it.rot;
+  $("heightOut").textContent = fmt(itemBox(it).h.toFixed(1));
+}
+function describe(it) { return `${it.name} – ${it.design.paths.length} shape${it.design.paths.length === 1 ? "" : "s"}`; }
+
+function selectItem(id) {
+  selId = id; const it = sel(); design = it ? it.design : null;
+  if (it) {
+    writeOpts(it.opts); writePos(it);
+    $("fileName").textContent = describe(it);
+    $("imgOpts").hidden = !(it.design.source && it.design.source.type === "image");
+  } else { $("fileName").textContent = ""; $("heightOut").textContent = "–"; }
+  $("cutFor").textContent = it ? `for “${it.name}”` : "";
+  renderItemList(); refresh();
+}
+function syncFromDom() {
+  const it = sel(); if (!it) return;
+  it.opts = readOpts();
+  it.w = Math.max(1, +$("width").value || it.w); it.x = +$("offX").value || 0; it.y = +$("offY").value || 0; it.rot = +$("rot").value || 0;
+  $("heightOut").textContent = fmt(itemBox(it).h.toFixed(1));
+  renderItemList();
+}
+function freeSpot(w) {
+  if (!items.length) return [10, 10];
+  let x1 = 0, y0 = Infinity;
+  for (const it of items) { const b = itemBox(it); x1 = Math.max(x1, b.x + b.w); y0 = Math.min(y0, b.y); }
+  return x1 + 10 + w <= BED.w ? [x1 + 10, y0] : [10, 10];
+}
+function addItem(d, name, extra = {}) {
+  const w = d.naturalMm ? Math.round(Math.min(380, Math.max(10, d.naturalMm))) : Math.max(5, +$("width").value || 100);
+  const it = { id: ++itemSeq, name, design: d, w, rot: 0, mirror: false, opts: readOpts(), x: 10, y: 10, ...extra };
+  if (!("x" in extra)) { const [x, y] = freeSpot(w); it.x = x; it.y = y; }
+  items.push(it); selectItem(it.id);
+  return it;
+}
+function removeItem(id) {
+  items = items.filter(i => i.id !== id);
+  selectItem(items.length ? items[items.length - 1].id : null);
+}
+function cloneItem(it, dx, dy) {
+  const c = { ...it, id: ++itemSeq, opts: { ...it.opts }, x: it.x + dx, y: it.y + dy };
+  items.push(c); return c;
 }
 
-let tpCache = { key: null, val: null };
-function toolpaths() {
-  const S = settings(), placed = placedPaths();
-  const key = JSON.stringify([design && design.id, $("width").value, $("offX").value, $("offY").value, S.mode, $("bit").value, $("exact").checked]);
-  if (tpCache.key === key) return tpCache.val;
-  const r = BITS[$("bit").value].dia / 2;
+// replaces the selected piece's design, or adds a new piece
+function setDesign(d, name) {
+  d.name = name;
+  const it = sel();
+  if (pendingAdd || !it) { pendingAdd = false; addItem(d, name); return; }
+  it.design = d; it.name = name;
+  it.w = d.naturalMm ? Math.round(Math.min(380, Math.max(10, d.naturalMm))) : Math.max(5, +$("width").value || it.w);
+  selectItem(it.id);
+}
+
+function renderItemList() {
+  const box = $("itemList"); box.innerHTML = "";
+  $("itemsBox").hidden = !items.length;
+  for (const it of items) {
+    const b = document.createElement("button");
+    b.className = "chip" + (it.id === selId ? " sel" : "");
+    b.textContent = `${it.name.length > 22 ? it.name.slice(0, 21) + "…" : it.name} · ${MODE_NAMES[it.opts.mode] || it.opts.mode}`;
+    b.onclick = () => selectItem(it.id);
+    box.append(b);
+  }
+  $("dupBtn").disabled = $("copiesBtn").disabled = $("delBtn").disabled = !sel();
+  $("openBtn").textContent = sel() ? "Swap the selected piece for another file…" : "Open design…";
+  $("useTextBtn").textContent = sel() && sel().design.isText ? "Change this text" : "Use this text";
+}
+
+// ----- shapes -----
+function shapeDesign(kind) {
+  const pts = [], P = (x, y) => pts.push([x, -y]);
+  const arc = (cx, cy, r, a0, a1, n) => { for (let i = 0; i <= n; i++) { const a = a0 + (a1 - a0) * i / n; P(cx + r * Math.cos(a), cy + r * Math.sin(a)); } };
+  const rr = (w, h, r) => { arc(w - r, h - r, r, 0, Math.PI / 2, 12); arc(r, h - r, r, Math.PI / 2, Math.PI, 12); arc(r, r, r, Math.PI, 1.5 * Math.PI, 12); arc(w - r, r, r, 1.5 * Math.PI, 2 * Math.PI, 12); };
+  let raw, name;
+  switch (kind) {
+    case "rect": P(0, 0); P(100, 0); P(100, 60); P(0, 60); P(0, 0); name = "Rectangle"; break;
+    case "round": rr(100, 60, 10); pts.push(pts[0].slice()); name = "Rounded rectangle"; break;
+    case "circle": arc(40, 40, 40, 0, 2 * Math.PI, 180); name = "Circle"; break;
+    case "oval": for (let i = 0; i <= 180; i++) { const a = i / 180 * 2 * Math.PI; P(60 * Math.cos(a), 40 * Math.sin(a)); } name = "Oval"; break;
+    case "heart": for (let i = 0; i <= 240; i++) { const t = i / 240 * 2 * Math.PI; P(16 * Math.sin(t) ** 3 * 2.5, (13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t)) * 2.5); } name = "Heart"; break;
+    case "star": for (let i = 0; i <= 10; i++) { const a = Math.PI / 2 + i * Math.PI / 5, r = i % 2 ? 16 : 40; P(r * Math.cos(a), r * Math.sin(a)); } name = "Star"; break;
+    case "arch": P(0, 0); P(120, 0); P(120, 50); arc(60, 50, 60, 0, Math.PI, 90); P(0, 0); name = "Arched sign"; break;
+    case "tree": [[0, 0], [8, 0], [8, 8], [35, 8], [20, 30], [30, 30], [16, 52], [24, 52], [0, 85], [-24, 52], [-16, 52], [-30, 30], [-20, 30], [-35, 8], [-8, 8], [-8, 0], [0, 0]].forEach(([x, y]) => P(x, y)); name = "Christmas tree"; break;
+    case "frame": {
+      rr(160, 100, 10); pts.push(pts[0].slice());
+      const inner = []; const save = pts.splice(0); rr(160, 100, 10); const outer = pts.splice(0); outer.push(outer[0].slice());
+      for (const [x, y] of outer) inner.push([5 + x * 150 / 160, -5 + y * 90 / 100]);
+      raw = [outer, inner]; name = "Border frame"; break;
+    }
+    case "tag": rr(40, 120, 8); pts.push(pts[0].slice()); raw = [pts.splice(0)]; arc(20, 108, 3.5, 0, 2 * Math.PI, 40); raw.push(pts.splice(0)); name = "Tag / bookmark"; break;
+  }
+  return Object.assign(normalize(raw || [pts], 1), { name });
+}
+
+// ----- per-piece geometry, cached -----
+const localCache = new Map();
+function localKey(it) { return JSON.stringify([it.design.id, +it.w, +it.rot, !!it.mirror]); }
+function localPaths(it) {
+  const key = localKey(it); if (localCache.has(key)) return localCache.get(key);
+  const d = it.design, s = it.w / d.w, a = it.rot * Math.PI / 180, c = Math.cos(a), sn = Math.sin(a);
+  const cx = d.w * s / 2, cy = d.h * s / 2;
+  const tf = ([x, y]) => { let X = x * s - cx; const Y = y * s - cy; if (it.mirror) X = -X; return [X * c - Y * sn, X * sn + Y * c]; };
+  const corners = [[0, 0], [d.w, 0], [d.w, d.h], [0, d.h]].map(tf);
+  const mx = Math.min(...corners.map(p => p[0])), my = Math.min(...corners.map(p => p[1]));
+  const bw = Math.max(...corners.map(p => p[0])) - mx, bh = Math.max(...corners.map(p => p[1])) - my;
+  const paths = d.paths.map(p => ({ closed: p.closed, pts: rdp(p.pts.map(q => { const [X, Y] = tf(q); return [X - mx, Y - my]; }), 0.02) }))
+                       .filter(p => p.pts.length > 1);
+  const val = { paths, bw, bh };
+  if (localCache.size > 200) localCache.clear();
+  localCache.set(key, val); return val;
+}
+const shift = (paths, ox, oy) => paths.map(p => ({ ...p, pts: p.pts.map(([x, y]) => [x + ox, y + oy]) }));
+function placedPaths(it) {
+  if (it) return shift(localPaths(it).paths, it.x, it.y);
+  return items.flatMap(i => placedPaths(i));
+}
+
+// ----- toolpaths for one piece (in its own frame; moved into place when used) -----
+const tpCache = new Map();
+function toolpathsFor(it, S) {
+  const bitKey = it.opts.bit, key = JSON.stringify([localKey(it), S.mode, bitKey, it.opts.exact, S.vAngle, S.vMax]);
+  if (tpCache.has(key)) return tpCache.get(key);
+  const placed = localPaths(it).paths, r = BITS[bitKey].dia / 2;
   let val = { paths: placed, note: "" };
   const closed = placed.filter(p => p.closed), open = placed.filter(p => !p.closed);
-  if (S.mode === "cut" && $("exact").checked && closed.length) {
+  if (S.mode === "cut" && it.opts.exact && closed.length) {
     const R = rasterize(closed, r + 2);
-    const dist = edt(R.inside, R.W, R.H);                 // distance to the shape
+    const dist = edt(R.inside, R.W, R.H);
     const lim = r * R.res + 0.5, v = new Float32Array(R.W * R.H);
     for (let i = 0; i < v.length; i++) v[i] = lim - dist[i];
     const outer = traceIso(v, R.W, R.H, 0).map(l => ({ closed: true, pts: rdp(l.map(R.toMm), 0.02) }));
     val = { paths: [...outer, ...open], note: "" };
   } else if (S.mode === "pocket") {
-    if (!closed.length) val = { paths: placed, note: "There are no closed shapes to carve out, so it will engrave the lines instead." };
+    if (!closed.length) val = { paths: placed, note: "no closed shapes to carve out, so it will engrave the lines instead." };
     else {
       const R = rasterize(closed, 2);
       const notInside = new Uint8Array(R.inside.length); for (let i = 0; i < notInside.length; i++) notInside[i] = 1 - R.inside[i];
-      const dist = edt(notInside, R.W, R.H);              // distance to the edge, inside the shape
-      const stepover = BITS[$("bit").value].dia * 0.4, v = new Float32Array(R.W * R.H), rings = [];
+      const dist = edt(notInside, R.W, R.H);
+      const stepover = BITS[bitKey].dia * 0.4, v = new Float32Array(R.W * R.H), rings = [];
       for (let k = 0; k < 600; k++) {
         const lim = (r + k * stepover) * R.res + 0.5;
         for (let i = 0; i < v.length; i++) v[i] = dist[i] - lim;
@@ -874,7 +1023,6 @@ function toolpaths() {
         if (!loops.length) break;
         for (const l of loops) rings.push({ closed: true, pts: rdp(l.map(R.toMm), 0.02) });
       }
-      // find parts narrower than the bit, which it can't reach
       const lim0 = r * R.res + 0.5, reach = new Uint8Array(dist.length);
       for (let i = 0; i < dist.length; i++) reach[i] = dist[i] > lim0 ? 1 : 0;
       const dReach = edt(reach, R.W, R.H);
@@ -882,11 +1030,14 @@ function toolpaths() {
       for (let i = 0; i < dist.length; i++) if (R.inside[i]) { inside++; if (dReach[i] > lim0 + 1.5) missed++; }
       const pct = inside ? Math.round(missed / inside * 100) : 0;
       val = { paths: [...rings, ...open], note: !rings.length
-        ? "The shapes are thinner than the bit, so nothing can be carved out. Make the design bigger, pick a smaller bit, or use Engrave."
-        : pct >= 3 ? `About ${pct}% of the design is narrower than the bit and won't be carved. Make it bigger or pick a smaller bit.` : "" };
+        ? "the shapes are thinner than the bit, so nothing can be carved out. Make it bigger, pick a smaller bit, or use V-carve."
+        : pct >= 3 ? `about ${pct}% is narrower than the bit and won't be carved. Make it bigger or pick a smaller bit (or use V-carve).` : "" };
     }
+  } else if (S.mode === "vcarve" && typeof vcarvePaths === "function") {
+    val = vcarvePaths(closed, open, S, bitKey);
   }
-  tpCache = { key, val };
+  if (tpCache.size > 100) tpCache.clear();
+  tpCache.set(key, val);
   return val;
 }
 
@@ -910,49 +1061,48 @@ function orderPaths(paths) {
     let pts = p.pts;
     if (p.closed) { const ring = pts.slice(0, -1); pts = [...ring.slice(how.rot), ...ring.slice(0, how.rot)]; pts.push(pts[0]); }
     else if (how.rev) pts = pts.slice().reverse();
-    out.push({ closed: p.closed, pts });
+    out.push({ closed: p.closed, pts, z: p.z });
     at = pts.at(-1);
   }
   return out;
 }
 
-function settings() {
-  const m = mode(), thick = +$("thick").value || 0;
+// ----- settings -----
+function globalSettings() {
+  return { spindle: Math.max(0, +$("spindle").value || 0), safe: Math.max(1, +$("safe").value || 5), air: $("airRun").checked };
+}
+function settingsFrom(o) {
+  const m = o.mode, thick = +o.thick || 0;
   return {
+    ...globalSettings(),
     mode: m, cut: m === "cut",
-    total: m === "relief" ? Math.max(0.5, +$("rH").value || 4) : m === "cut" ? ($("skin").checked ? Math.max(0.1, thick - SKIN) : thick + 0.2) : (+$("depth").value || 0),
-    feed: Math.max(10, +$("feed").value || 0),
-    plunge: Math.max(10, +$("plunge").value || 0),
-    step: Math.max(0.05, +$("stepdown").value || 0),
-    spindle: Math.max(0, +$("spindle").value || 0),
-    safe: Math.max(1, +$("safe").value || 5),
-    air: $("airRun").checked,
-    reliefH: Math.max(0.5, +$("rH").value || 4), round: Math.max(0, +$("rRound").value || 0),
-    border: Math.max(3, +$("rBorder").value || 8), lines: $("rLines").checked,
-    lineD: Math.max(0, +$("rLineD").value || 0), finish: +$("rFinish").value || 0.12,
+    total: m === "relief" ? Math.max(0.5, +o.rH || 4) : m === "cut" ? (o.skin ? Math.max(0.1, thick - SKIN) : thick + 0.2) : (+o.depth || 0),
+    feed: Math.max(10, +o.feed || 0), plunge: Math.max(10, +o.plunge || 0), step: Math.max(0.05, +o.stepdown || 0),
+    reliefH: Math.max(0.5, +o.rH || 4), round: Math.max(0, +o.rRound || 0),
+    border: Math.max(3, +o.rBorder || 8), lines: !!o.rLines,
+    lineD: Math.max(0, +o.rLineD || 0), finish: +o.rFinish || 0.12,
+    vAngle: BITS[o.bit] && BITS[o.bit].angle || 60, vMax: +o.depth || 3,
   };
 }
-
+function settings() { return settingsFrom(readOpts()); }
 const fmt = v => { const s = (+v).toFixed(3).replace(/\.?0+$/, ""); return s === "-0" ? "0" : s; };
 
 // ================= 3D raised carving (relief) =================
-let reliefCache = { key: null, val: null };
-function reliefModel(S) {
-  const placed = placedPaths(), bit = BITS[$("bit").value], r = bit.dia / 2;
-  const key = JSON.stringify([design && design.id, $("width").value, $("offX").value, $("offY").value, $("bit").value,
-                              S.reliefH, S.round, S.border, S.lines, S.lineD, S.finish, S.step]);
-  if (reliefCache.key === key) return reliefCache.val;
+const reliefCache = new Map();
+function reliefModel(placed, S, bitKey, lkey) {
+  const bit = BITS[bitKey], r = bit.dia / 2;
+  const key = JSON.stringify([lkey, bitKey, S.reliefH, S.round, S.border, S.lines, S.lineD, S.finish, S.step]);
+  if (reliefCache.has(key)) return reliefCache.get(key);
   const closed = placed.filter(p => p.closed), open = placed.filter(p => !p.closed);
   if (!closed.length) {
-    const val = { note: "3D raised carving needs a closed outline. For a drawing, choose 'a drawing – 3D raised carving' when opening it.", rows: [] };
-    reliefCache = { key, val }; return val;
+    const val = { note: "3D raised carving needs a closed outline. For a drawing, choose 'a drawing – 3D raised carving' when opening it.", rows: [], rough: [] };
+    reliefCache.set(key, val); return val;
   }
   let bx0 = Infinity, by0 = Infinity, bx1 = -Infinity, by1 = -Infinity;
   for (const p of closed) for (const [x, y] of p.pts) { bx0 = Math.min(bx0, x); bx1 = Math.max(bx1, x); by0 = Math.min(by0, y); by1 = Math.max(by1, y); }
   const B = S.border, D = S.reliefH;
   const res = Math.min(8, Math.max(2, Math.sqrt(2.2e6 / ((bx1 - bx0 + 2 * B + 2 * r) * (by1 - by0 + 2 * B + 2 * r)))));
   const R = rasterize(closed, B + r + 1, res), W = R.W, H = R.H;
-  // height of the finished surface: background at -D, shape domed up towards the top of the wood
   const notIn = new Uint8Array(W * H); for (let i = 0; i < notIn.length; i++) notIn[i] = 1 - R.inside[i];
   const dIn = edt(notIn, W, H), surf = new Float32Array(W * H), Rpx = Math.max(1e-6, S.round * res);
   for (let i = 0; i < surf.length; i++) {
@@ -960,7 +1110,6 @@ function reliefModel(S) {
     const t = S.round > 0 ? Math.min(1, (dIn[i] - 0.5) / Rpx) : 1;
     surf[i] = -D + D * Math.sqrt(Math.max(0, 1 - (1 - t) * (1 - t)));
   }
-  // carve the drawing's lines into the surface as V grooves
   if (S.lines && open.length && S.lineD > 0) {
     const c = document.createElement("canvas"); c.width = W; c.height = H;
     const g = c.getContext("2d", { willReadFrequently: true });
@@ -971,15 +1120,24 @@ function reliefModel(S) {
     const dL = edt(onLine, W, H), half = Math.max(S.lineD, 0.6) * res;
     for (let i = 0; i < surf.length; i++) if (R.inside[i] && dL[i] < half) surf[i] = Math.max(-D, surf[i] - S.lineD * (1 - dL[i] / half));
   }
-  // where the tip of a ball-nose bit has to be so it touches the surface but never cuts into it
+  const val = heightmapJob(surf, W, H, res, R.x0, R.y1, [bx0 - B, by0 - B, bx1 + B, by1 + B], bitKey, S, -D);
+  reliefCache.set(key, val);
+  return val;
+}
+
+// raster toolpaths that follow a height map with a ball-nose (or V) bit, plus roughing layers and a shaded preview
+function heightmapJob(surf, W, H, res, fx0, fy1, area, bitKey, S, floorZ) {
+  const bit = BITS[bitKey], r = bit.dia / 2, D = -floorZ;
   const rp = r * res, kr = Math.ceil(rp), step = Math.max(1, Math.round(rp / 6)), ker = [];
+  const cone = bit.vbit ? 1 / Math.tan((bit.angle || 60) * Math.PI / 360) : 0;
+  const prof = dd => bit.vbit ? dd * cone : r - Math.sqrt(Math.max(0, r * r - dd * dd));
   for (let dy = -kr; dy <= kr; dy += step) for (let dx = -kr; dx <= kr; dx += step) {
     const dd = Math.hypot(dx, dy) / res; if (dd > r) continue;
-    ker.push([dx, dy, r - Math.sqrt(r * r - dd * dd)]);
+    ker.push([dx, dy, prof(dd)]);
   }
-  ker.push([1, 0, r - Math.sqrt(Math.max(0, r * r - 1 / (res * res)))], [-1, 0, r - Math.sqrt(Math.max(0, r * r - 1 / (res * res)))]);
+  ker.push([1, 0, prof(1 / res)], [-1, 0, prof(1 / res)]);
   const tip = (ix, iy) => {
-    let z = -D;
+    let z = floorZ;
     for (const [dx, dy, off] of ker) {
       const x = ix + dx, y = iy + dy;
       if (x < 0 || y < 0 || x >= W || y >= H) continue;
@@ -987,106 +1145,64 @@ function reliefModel(S) {
     }
     return Math.min(0, z);
   };
-  const toPx = (x, y) => [Math.round((x - R.x0) * res - 0.5), Math.round((R.y1 - y) * res - 0.5)];
-  const ax0 = bx0 - B, ax1 = bx1 + B, ay0 = by0 - B, ay1 = by1 + B;
+  const toPx = (x, y) => [Math.round((x - fx0) * res - 0.5), Math.round((fy1 - y) * res - 0.5)];
+  const [ax0, ay0, ax1, ay1] = area;
   const rowsFor = stepover => {
     const rows = [], n = Math.max(1, Math.ceil((ay1 - ay0) / stepover));
     for (let k = 0; k <= n; k++) {
       const y = ay0 + (ay1 - ay0) * k / n, iy = toPx(0, y)[1], [ixa] = toPx(ax0, y), [ixb] = toPx(ax1, y);
       const pts = [];
-      for (let ix = ixa; ix <= ixb; ix++) pts.push([R.x0 + (ix + 0.5) / res, tip(ix, iy)]);
+      for (let ix = ixa; ix <= ixb; ix++) pts.push([fx0 + (ix + 0.5) / res, tip(ix, iy)]);
       rows.push({ y, pts });
     }
     return rows;
   };
-  const finish = rowsFor(Math.max(0.05, bit.dia * S.finish));
+  const so = bit.vbit ? Math.max(0.1, S.finish * 2) : Math.max(0.05, bit.dia * S.finish);
+  const finish = rowsFor(so);
   const rough = [];
-  const levels = Math.ceil(D / S.step - 1e-9) - 1;              // finishing pass takes the last layer
+  const levels = Math.ceil(D / S.step - 1e-9) - 1;
   if (levels > 0) {
-    const coarse = rowsFor(bit.dia * 0.45);
+    const coarse = rowsFor(Math.max(so, bit.dia * 0.45));
     for (let k = 1; k <= levels; k++) {
       const lvl = -k * S.step;
       rough.push(coarse.map(rw => ({ y: rw.y, pts: rw.pts.map(([x, z]) => [x, Math.max(lvl, Math.min(0, z + 0.3))]) })));
     }
   }
-  // shaded picture of the finished carving for the preview
+  const img = shadeHeightmap(surf, W, H, res, (x, y) => {
+    const [qx0, qy0] = toPx(ax0 - r, ay1 + r), [qx1, qy1] = toPx(ax1 + r, ay0 - r);
+    return x >= qx0 && x <= qx1 && y >= qy0 && y <= qy1;
+  });
+  return { rows: finish, rough, img, surf, W, H, res, frame: { x0: fx0, y1: fy1, w: W / res, h: H / res },
+           rect: [[ax0, ay0], [ax1, ay0], [ax1, ay1], [ax0, ay1], [ax0, ay0]], note: "" };
+}
+
+function shadeHeightmap(surf, W, H, res, keep) {
   const img = document.createElement("canvas"); img.width = W; img.height = H;
   const ig = img.getContext("2d"), id = ig.createImageData(W, H);
-  const [qx0, qy0] = toPx(ax0 - r, ay1 + r), [qx1, qy1] = toPx(ax1 + r, ay0 - r);
   for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
-    const i = y * W + x; if (x < qx0 || x > qx1 || y < qy0 || y > qy1) continue;
+    const i = y * W + x; if (keep && !keep(x, y)) continue;
     const gx = (surf[i + 1] - surf[i - 1]) * res / 2, gy = (surf[i - W] - surf[i + W]) * res / 2;
     const sh = Math.max(0, (-gx * -0.5 + -gy * 0.5 + 1) / Math.sqrt(gx * gx + gy * gy + 1) / 1.22);
     const k = 0.35 + 0.65 * sh;
     id.data[i * 4] = 214 * k; id.data[i * 4 + 1] = 170 * k; id.data[i * 4 + 2] = 118 * k; id.data[i * 4 + 3] = 255;
   }
   ig.putImageData(id, 0, 0);
-  const val = { rows: finish, rough, img, frame: { x0: R.x0, y1: R.y1, w: W / res, h: H / res },
-                rect: [[ax0, ay0], [ax1, ay0], [ax1, ay1], [ax0, ay1], [ax0, ay0]], note: "" };
-  reliefCache = { key, val };
-  return val;
+  return img;
 }
 
-// simplify one raster row (x, z) without changing its shape by more than tol
-function simplifyRow(pts, tol) { return rdp(pts, tol); }
-
-function makeReliefGcode(S) {
-  const M = reliefModel(S);
-  const lift = S.air ? S.reliefH + 3 : 0, Z = v => fmt(v + lift);
-  const g = [`(${APP} - 3D raised carving ${fmt(S.reliefH)} mm${S.air ? " - TEST RUN IN THE AIR" : ""})`,
-             "G21 G90 G17 G94", `G0 Z${Z(S.safe)}`, `M3 S${fmt(S.spindle)}`, "G4 P3"];
-  let len = 0;
-  const pass = rows => {
-    if (!rows.length) return;
-    rows.forEach((rw, k) => {
-      let pts = simplifyRow(rw.pts, 0.01);
-      if (k % 2) pts = pts.slice().reverse();                 // back and forth
-      const y = fmt(rw.y);
-      if (k === 0) { g.push(`G0 X${fmt(pts[0][0])} Y${y}`, `G0 Z${Z(0.5)}`, `G1 Z${Z(pts[0][1])} F${fmt(S.plunge)}`); }
-      else {
-        const prevZ = +g._lastZ, up = Math.max(prevZ, pts[0][1]);
-        g.push(`G1 Z${Z(up)} F${fmt(S.plunge)}`, `G1 Y${y}`, `G1 Z${Z(pts[0][1])}`);
-        len += Math.abs(rows[k].y - rows[k - 1].y);
-      }
-      for (let i = 1; i < pts.length; i++) {
-        g.push(`G1 X${fmt(pts[i][0])} Z${Z(pts[i][1])}` + (i === 1 ? ` F${fmt(S.feed)}` : ""));
-        len += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
-      }
-      g._lastZ = pts.at(-1)[1];
-    });
-    g.push(`G0 Z${Z(S.safe)}`);
-  };
-  for (const lvl of M.rough) pass(lvl);
-  pass(M.rows);
-  g.push("M5", `G0 Z${Z(S.safe)}`, "G0 X0 Y0", "(done)");
-  const text = g.join("\n") + "\n";
-  const minutes = len / S.feed * 1.15 + 0.1;                   // +15% for slowing down on bumps
-  return { text, minutes, paths: M.rect ? [{ closed: true, pts: M.rect }] : [], passes: M.rough.length + 1, S, note: M.note, relief: M };
-}
-
-function makeGcode() {
-  if (mode() === "relief") return makeReliefGcode(settings());
-  const S = settings(), tp = toolpaths(), paths = orderPaths(tp.paths);
-  const dia = BITS[$("bit").value].dia;
-  const lift = S.air ? S.total + 3 : 0;        // test run: everything raised so the bit never touches
-  const Z = v => fmt(v + lift);
-  const passes = Math.max(1, Math.ceil(S.total / S.step - 1e-9));
-  const g = [
-    `(${APP} - ${S.mode} ${fmt(S.total)} mm deep${S.air ? " - TEST RUN IN THE AIR" : ""})`,
-    "G21 G90 G17 G94",
-    `G0 Z${Z(S.safe)}`,
-    `M3 S${fmt(S.spindle)}`,
-    "G4 P3",
-  ];
-  let cutLen = 0, travel = 0, at = [0, 0];
+// ================= G-code =================
+function emitPaths(g, paths, S, Z, dia) {
+  let cutLen = 0, travel = 0, plunges = 0, at = [0, 0];
   paths.forEach((p, idx) => {
     let pts = p.pts.slice();
+    const depth = p.z != null ? p.z : S.total;
+    const passes = Math.max(1, Math.ceil(depth / S.step - 1e-9));
     g.push(`G0 X${fmt(pts[0][0])} Y${fmt(pts[0][1])}`);
     travel += Math.hypot(pts[0][0] - at[0], pts[0][1] - at[1]);
     g.push(`G0 Z${Z(0.5)}`);
     for (let k = 1; k <= passes; k++) {
-      if (k > 1 && !p.closed) pts = pts.reverse();   // open lines: go back and forth
-      g.push(`G1 Z${Z(-Math.min(S.total, k * S.step))} F${fmt(S.plunge)}`);
+      if (k > 1 && !p.closed) pts = pts.reverse();
+      g.push(`G1 Z${Z(-Math.min(depth, k * S.step))} F${fmt(S.plunge)}`); plunges += depth / passes;
       for (let i = 1; i < pts.length; i++) {
         g.push(`G1 X${fmt(pts[i][0])} Y${fmt(pts[i][1])}` + (i === 1 ? ` F${fmt(S.feed)}` : ""));
         cutLen += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
@@ -1095,29 +1211,111 @@ function makeGcode() {
     at = pts.at(-1);
     const next = paths[idx + 1];
     const near = next && Math.hypot(next.pts[0][0] - at[0], next.pts[0][1] - at[1]) <= dia * 1.5;
-    g.push(`G0 Z${Z(near ? 1 : S.safe)}`);          // small hop when the next cut is right next door
+    g.push(`G0 Z${Z(near ? 1 : S.safe)}`);
   });
-  g.push("M5", `G0 Z${Z(S.safe)}`, "G0 X0 Y0", "(done)");
-  const minutes = cutLen / S.feed + (paths.length * passes * S.total) / S.plunge + travel / 2000 + paths.length * 0.01 + 0.05;
-  return { text: g.join("\n") + "\n", minutes, paths, passes, S, note: tp.note };
+  return cutLen / S.feed + plunges / S.plunge + travel / 2000 + paths.length * 0.01;
+}
+
+function emitRaster(g, M, S, Z, ox, oy) {
+  let len = 0, lastZ = 0;
+  const pass = rows => {
+    if (!rows.length) return;
+    rows.forEach((rw, k) => {
+      let pts = rdp(rw.pts, 0.01);
+      if (k % 2) pts = pts.slice().reverse();
+      const y = fmt(rw.y + oy);
+      if (k === 0) g.push(`G0 X${fmt(pts[0][0] + ox)} Y${y}`, `G0 Z${Z(0.5)}`, `G1 Z${Z(pts[0][1])} F${fmt(S.plunge)}`);
+      else {
+        g.push(`G1 Z${Z(Math.max(lastZ, pts[0][1]))} F${fmt(S.plunge)}`, `G1 Y${y}`, `G1 Z${Z(pts[0][1])}`);
+        len += Math.abs(rows[k].y - rows[k - 1].y);
+      }
+      for (let i = 1; i < pts.length; i++) {
+        g.push(`G1 X${fmt(pts[i][0] + ox)} Z${Z(pts[i][1])}` + (i === 1 ? ` F${fmt(S.feed)}` : ""));
+        len += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+      }
+      lastZ = pts.at(-1)[1];
+    });
+    g.push(`G0 Z${Z(S.safe)}`);
+  };
+  for (const lvl of M.rough) pass(lvl);
+  pass(M.rows);
+  return len / S.feed * 1.15;
+}
+
+// one "operation" = everything cut with one bit
+function emitOp(op) {
+  const G = globalSettings();
+  const its = op.items.slice().sort((a, b) => MODE_ORDER[a.opts.mode] - MODE_ORDER[b.opts.mode]);
+  let maxDepth = 0;
+  for (const it of its) maxDepth = Math.max(maxDepth, settingsFrom(it.opts).total);
+  const lift = G.air ? maxDepth + 3 : 0, Z = v => fmt(v + lift);
+  const g = [`(${APP} - ${BITS[op.bit].name}${G.air ? " - TEST RUN IN THE AIR" : ""})`, "G21 G90 G17 G94", `G0 Z${Z(G.safe)}`, `M3 S${fmt(G.spindle)}`, "G4 P3"];
+  let minutes = 0.05;
+  const notes = [], preview = [], rasters = [];
+  for (const it of its) {
+    const S = settingsFrom(it.opts);
+    if (S.mode === "relief" || S.mode === "inlayM") {
+      const M = S.mode === "relief" ? reliefModel(localPaths(it).paths, S, it.opts.bit, localKey(it)) : inlayMaleModel(it, S);
+      if (M.note) notes.push(`${it.name}: ${M.note}`);
+      if (!M.rows.length) continue;
+      g.push(`(${it.name})`);
+      minutes += emitRaster(g, M, S, Z, it.x, it.y);
+      rasters.push({ M, ox: it.x, oy: it.y });
+      preview.push({ closed: true, pts: M.rect.map(([x, y]) => [x + it.x, y + it.y]), item: it.id });
+      continue;
+    }
+    const tp = toolpathsFor(it, S);
+    if (tp.note) notes.push(`${it.name}: ${tp.note}`);
+    const paths = orderPaths(shift(tp.paths, it.x, it.y));
+    g.push(`(${it.name})`);
+    minutes += emitPaths(g, paths, S, Z, BITS[op.bit].dia);
+    for (const p of paths) preview.push({ ...p, item: it.id });
+  }
+  g.push("M5", `G0 Z${Z(G.safe)}`, "G0 X0 Y0", "(done)");
+  return { text: g.join("\n") + "\n", minutes, notes, preview, rasters, maxDepth };
+}
+
+function buildJob() {
+  const groups = new Map();
+  for (const it of items) { const k = it.opts.bit; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(it); }
+  let ops = [...groups.entries()].map(([bit, its]) => ({ bit, items: its, last: Math.max(...its.map(i => MODE_ORDER[i.opts.mode] ?? 5)) }));
+  ops.sort((a, b) => a.last - b.last);                    // anything that cuts pieces free goes last
+  ops = ops.map(op => ({ ...op, ...emitOp(op) }));
+  return {
+    ops, minutes: ops.reduce((a, o) => a + o.minutes, 0),
+    notes: ops.flatMap(o => o.notes), preview: ops.flatMap(o => o.preview), rasters: ops.flatMap(o => o.rasters),
+    maxDepth: Math.max(0, ...ops.map(o => o.maxDepth)), S: settings(),
+  };
+}
+// kept for the tests and older callers: the whole job as one program when only one bit is used
+function makeGcode() {
+  const J = buildJob(); const op = J.ops[0] || { text: "", minutes: 0 };
+  return { text: op.text, minutes: J.minutes, paths: J.preview, passes: 1, S: J.S, note: J.notes.join(" "), relief: J.rasters[0] && J.rasters[0].M, job: J };
 }
 
 // ================= Preview =================
 const cv = $("cv"), ctx = cv.getContext("2d");
-let machinePos = null, lastJob = null;
+let machinePos = null, lastJob = null, view = null, drag = null;
+
+function jobBounds(withBed) {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  const add = (x, y) => { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y); };
+  for (const it of items) { const b = itemBox(it); add(b.x, b.y); add(b.x + b.w, b.y + b.h); }
+  if (lastJob) for (const p of lastJob.preview) for (const [x, y] of p.pts) add(x, y);
+  if (withBed) { add(0, 0); add(BED.w, BED.h); if (typeof board !== "undefined" && board.on) add(board.w, board.h); }
+  return minX === Infinity ? [0, 0, BED.w, BED.h] : [minX, minY, maxX, maxY];
+}
 
 function draw() {
   const wrap = $("cvWrap"), dpr = window.devicePixelRatio || 1;
   const W = wrap.clientWidth, H = wrap.clientHeight;
   cv.width = W * dpr; cv.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, W, H);
-  const paths = lastJob ? lastJob.paths : [], orig = design ? placedPaths() : [];
-  let maxX = BED.w, maxY = BED.h, minX = 0, minY = 0;
-  if ($("zoom").checked && paths.length) { minX = minY = Infinity; maxX = maxY = -Infinity; }
-  for (const p of paths) for (const [x, y] of p.pts) { maxX = Math.max(maxX, x); maxY = Math.max(maxY, y); minX = Math.min(minX, x); minY = Math.min(minY, y); }
-  if ($("zoom").checked && paths.length) { minX -= 5; minY -= 5; maxX += 5; maxY += 5; }
+  let [minX, minY, maxX, maxY] = jobBounds(!$("zoom").checked || !items.length);
+  if ($("zoom").checked && items.length) { minX -= 5; minY -= 5; maxX += 5; maxY += 5; }
   const pad = 30, sc = Math.min((W - 2 * pad) / (maxX - minX), (H - 2 * pad) / (maxY - minY));
   const X = x => pad + (x - minX) * sc, Y = y => H - pad - (y - minY) * sc;
+  view = { X, Y, toMm: (px, py) => [(px - pad) / sc + minX, (H - pad - py) / sc + minY], sc };
   const stroke = (ps, style, width) => { ctx.strokeStyle = style; ctx.lineWidth = width;
     for (const p of ps) { ctx.beginPath(); p.pts.forEach(([x, y], i) => i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y))); ctx.stroke(); } };
 
@@ -1125,22 +1323,38 @@ function draw() {
   for (let x = 0; x <= BED.w; x += 10) { ctx.beginPath(); ctx.moveTo(X(x), Y(0)); ctx.lineTo(X(x), Y(BED.h)); ctx.stroke(); }
   for (let y = 0; y <= BED.h; y += 10) { ctx.beginPath(); ctx.moveTo(X(0), Y(y)); ctx.lineTo(X(BED.w), Y(y)); ctx.stroke(); }
   ctx.strokeStyle = "#bbb"; ctx.lineWidth = 2; ctx.strokeRect(X(0), Y(BED.h), BED.w * sc, BED.h * sc);
+  if (typeof drawBoard === "function") drawBoard(ctx, X, Y, sc);
   ctx.fillStyle = "#999"; ctx.font = "13px system-ui";
   ctx.fillText("Back of machine", X(BED.w / 2) - 50, Y(BED.h) - 8);
   ctx.fillText("Front (you)", X(BED.w / 2) - 35, Y(0) + 20);
 
   ctx.lineCap = ctx.lineJoin = "round";
-  if (lastJob && lastJob.relief && lastJob.relief.img) {
-    const f = lastJob.relief.frame;
-    ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(lastJob.relief.img, X(f.x0), Y(f.y1), f.w * sc, f.h * sc);
-    stroke(paths, "#1f6feb", 1.2);
-  } else {
-    stroke(paths, "rgba(31,111,235,.22)", Math.max(1.5, BITS[$("bit").value].dia * sc));
-    stroke(paths, "#1f6feb", 1.2);
-    if (mode() !== "engrave") stroke(orig, "#888", 1);
+  const moving = drag && drag.item;
+  if (lastJob) {
+    for (const R of lastJob.rasters) {
+      if (moving && R.M.ownerId === moving.id) continue;
+      const f = R.M.frame; ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(R.M.img, X(f.x0 + R.ox), Y(f.y1 + R.oy), f.w * sc, f.h * sc);
+    }
+    const tp = lastJob.preview.filter(p => !(moving && p.item === moving.id));
+    const dia = id => { const it = items.find(i => i.id === id); return it ? BITS[it.opts.bit].dia : 1; };
+    ctx.globalAlpha = 0.22; for (const p of tp) stroke([p], "#1f6feb", Math.max(1.5, dia(p.item) * sc)); ctx.globalAlpha = 1;
+    stroke(tp, "#1f6feb", 1.2);
   }
-
+  for (const it of items) {
+    const showDesign = it.opts.mode !== "engrave" || (moving && moving.id === it.id);
+    if (showDesign) stroke(placedPaths(it), moving && moving.id === it.id ? "#1f6feb" : "#888", 1);
+  }
+  const s = sel();
+  if (s && items.length) {
+    const b = itemBox(s);
+    ctx.setLineDash([5, 4]); ctx.strokeStyle = "#cf222e"; ctx.lineWidth = 1.2;
+    ctx.strokeRect(X(b.x), Y(b.y + b.h), b.w * sc, b.h * sc); ctx.setLineDash([]);
+    ctx.fillStyle = "#cf222e";
+    ctx.fillRect(X(b.x + b.w) - 6, Y(b.y) - 6, 12, 12);                         // resize handle
+    ctx.beginPath(); ctx.arc(X(b.x + b.w / 2), Y(b.y + b.h) - 22, 7, 0, 7); ctx.fill();   // rotate handle
+    ctx.beginPath(); ctx.moveTo(X(b.x + b.w / 2), Y(b.y + b.h)); ctx.lineTo(X(b.x + b.w / 2), Y(b.y + b.h) - 15); ctx.stroke();
+  }
   ctx.fillStyle = "#cf222e"; ctx.beginPath(); ctx.arc(X(0), Y(0), 6, 0, 7); ctx.fill();
   ctx.fillText("Start corner", X(0) + 10, Y(0) - 8);
   if (machinePos) {
@@ -1149,36 +1363,86 @@ function draw() {
     ctx.beginPath(); ctx.arc(X(mx), Y(my), 8, 0, 7); ctx.moveTo(X(mx) - 14, Y(my)); ctx.lineTo(X(mx) + 14, Y(my));
     ctx.moveTo(X(mx), Y(my) - 14); ctx.lineTo(X(mx), Y(my) + 14); ctx.stroke();
   }
-  if (!design) { ctx.fillStyle = "#888"; ctx.font = "18px system-ui"; ctx.fillText("Open a design or type some text to see it here", W / 2 - 190, H / 2); }
+  if (!items.length) { ctx.fillStyle = "#888"; ctx.font = "18px system-ui"; ctx.fillText("Open a design or type some text to see it here", W / 2 - 190, H / 2); }
+  else { ctx.fillStyle = "#888"; ctx.font = "13px system-ui"; ctx.fillText("Drag pieces to move them · red square = resize · red dot = turn", 12, 18); }
 }
 new ResizeObserver(draw).observe($("cvWrap"));
 
-let refreshTimer = null;
+// drag to move / resize / turn
+cv.addEventListener("pointerdown", e => {
+  if (!view || !items.length) return;
+  const r = cv.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top, [mx, my] = view.toMm(px, py);
+  const s = sel();
+  if (s) {
+    const b = itemBox(s);
+    if (Math.abs(px - view.X(b.x + b.w)) < 10 && Math.abs(py - view.Y(b.y)) < 10) drag = { kind: "size", item: s, b, w0: s.w };
+    else if (Math.hypot(px - view.X(b.x + b.w / 2), py - (view.Y(b.y + b.h) - 22)) < 11) drag = { kind: "turn", item: s, b, rot0: s.rot };
+  }
+  if (!drag) {
+    const hit = items.slice().reverse().find(it => { const b = itemBox(it); return mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h; });
+    if (!hit) return;
+    if (hit.id !== selId) selectItem(hit.id);
+    drag = { kind: "move", item: hit, dx: mx - hit.x, dy: my - hit.y };
+  }
+  cv.setPointerCapture(e.pointerId); e.preventDefault();
+});
+cv.addEventListener("pointermove", e => {
+  if (!drag) return;
+  const r = cv.getBoundingClientRect(), [mx, my] = view.toMm(e.clientX - r.left, e.clientY - r.top), it = drag.item;
+  if (drag.kind === "move") { it.x = Math.round((mx - drag.dx) * 2) / 2; it.y = Math.round((my - drag.dy) * 2) / 2; }
+  else if (drag.kind === "size") { const nw = Math.max(5, mx - drag.b.x); it.w = Math.round(drag.w0 * nw / drag.b.w); }
+  else { const cx = drag.b.x + drag.b.w / 2, cy = drag.b.y + drag.b.h / 2; let a = Math.atan2(my - cy, mx - cx) * 180 / Math.PI - 90; it.rot = Math.round(-a / 5) * 5; it.rot = ((it.rot % 360) + 360) % 360; }
+  writePos(it); draw();
+});
+const endDrag = () => { if (!drag) return; drag = null; refresh(); };
+cv.addEventListener("pointerup", endDrag); cv.addEventListener("pointercancel", endDrag);
+
+// ================= Refresh =================
+let refreshTimer = null, opIndex = 0;
 function refresh() { clearTimeout(refreshTimer); refreshTimer = setTimeout(refreshNow, 120); }
 function refreshNow() {
-  $("heightOut").textContent = design ? fmt(((+$("width").value || 0) * design.h / design.w).toFixed(1)) : "–";
-  lastJob = design ? makeGcode() : null;
+  lastJob = items.length ? buildJob() : null;
   const msgs = [];
   if (lastJob) {
     const m = Math.ceil(lastJob.minutes);
-    $("estimate").textContent = `About ${m < 60 ? m + " min" : Math.floor(m / 60) + " h " + (m % 60) + " min"} · ${lastJob.passes} pass${lastJob.passes > 1 ? "es" : ""} · ${fmt(lastJob.S.total)} mm deep`;
-    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-    for (const p of lastJob.paths) for (const [x, y] of p.pts) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
-    if (x0 < 0 || y0 < 0) msgs.push("Part of the cut is left of or in front of the start corner. Increase the gaps.");
-    if (x1 > BED.w || y1 > BED.h) msgs.push(`The cut goes past the machine's ${BED.w} × ${BED.h} mm area. Make it smaller or move it.`);
-    if (lastJob.S.cut && !$("skin").checked) msgs.push("Without the skin, screw or clamp the piece down so it can't be thrown when it comes loose.");
-    if (lastJob.S.mode === "pocket" && BITS[$("bit").value].vbit) msgs.push("A V-bit isn't good for carving out. Pick a flat bit.");
-    if (lastJob.S.mode === "relief" && !BITS[$("bit").value].ball) msgs.push("3D carving needs a ball-nose bit (rounded end). Pick one in the Bit list.");
-    if (lastJob.S.mode === "relief") msgs.push("Use wood at least " + fmt(lastJob.S.reliefH + 3) + " mm thick. The background is carved away and the shape is left standing up.");
-    if (lastJob.note) msgs.push(lastJob.note);
+    $("estimate").textContent = `About ${m < 60 ? m + " min" : Math.floor(m / 60) + " h " + (m % 60) + " min"} in total` +
+      (lastJob.ops.length > 1 ? ` · ${lastJob.ops.length} bits (it will stop for a bit change)` : "");
+    const [x0, y0, x1, y1] = jobBounds(false);
+    if (x0 < -0.01 || y0 < -0.01) msgs.push("Part of the job is left of or in front of the start corner. Move it in a bit.");
+    if (x1 > BED.w || y1 > BED.h) msgs.push(`The job goes past the machine's ${BED.w} × ${BED.h} mm area. Make it smaller or move it.`);
+    for (const it of items) {
+      const b = BITS[it.opts.bit];
+      if (it.opts.mode === "pocket" && b.vbit) msgs.push(`${it.name}: a V-bit isn't good for carving out; use V-carve or a flat bit.`);
+      if (it.opts.mode === "relief" && !b.ball) msgs.push(`${it.name}: 3D carving needs a ball-nose bit.`);
+      if (it.opts.mode === "vcarve" && !b.vbit) msgs.push(`${it.name}: V-carve needs a V-bit.`);
+      if (it.opts.mode === "cut" && !it.opts.skin) msgs.push(`${it.name}: without the skin, screw or clamp the piece so it can't be thrown when it comes loose.`);
+    }
+    if (items.some(i => i.opts.mode === "relief")) msgs.push(`Use wood at least ${fmt(lastJob.maxDepth + 3)} mm thick for the 3D carving.`);
+    msgs.push(...lastJob.notes);
+    if (typeof boardWarnings === "function") msgs.push(...boardWarnings());
   } else $("estimate").textContent = "";
   $("boundsWarn").hidden = !msgs.length; $("boundsWarn").textContent = msgs.join(" ");
-  updateButtons(); draw();
+  renderOps(); updateButtons(); draw();
+}
+
+function renderOps() {
+  const ops = lastJob ? lastJob.ops : [];
+  if (opIndex >= ops.length) opIndex = 0;
+  $("opsBox").hidden = ops.length < 2;
+  $("opsList").innerHTML = "";
+  ops.forEach((op, i) => {
+    const l = document.createElement("label"); l.className = "check";
+    const r = document.createElement("input"); r.type = "radio"; r.name = "op"; r.checked = i === opIndex; r.onchange = () => { opIndex = i; };
+    const s = document.createElement("span");
+    s.innerHTML = `<b>Step ${i + 1}: ${BITS[op.bit].name}</b><br><small></small>`;
+    s.querySelector("small").textContent = `${op.items.map(it => it.name).join(", ")} · about ${Math.ceil(op.minutes)} min`;
+    l.append(r, s); $("opsList").append(l);
+  });
 }
 
 $("saveBtn").onclick = () => {
-  const job = makeGcode();
-  download((job.S.air ? "TEST-" : "") + "easy-carve.nc", job.text);
+  const J = buildJob();
+  J.ops.forEach((op, i) => download(`${J.S.air ? "TEST-" : ""}easy-carve${J.ops.length > 1 ? `-step${i + 1}-${op.bit}` : ""}.nc`, op.text));
 };
 function download(name, text) {
   const a = document.createElement("a");
@@ -1186,6 +1450,32 @@ function download(name, text) {
   a.download = name; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
+
+// ----- item buttons -----
+$("addDesignBtn").onclick = () => { pendingAdd = true; $("tabFile").click(); $("fileIn").click(); };
+$("addTextBtn").onclick = () => { pendingAdd = true; $("tabText").click(); $("textIn").focus(); $("textIn").select(); };
+$("addShapeSel").onchange = () => {
+  const k = $("addShapeSel").value; $("addShapeSel").value = ""; if (!k) return;
+  const d = shapeDesign(k); pendingAdd = true; setDesign(d, d.name);
+  const it = sel(); if (it && k === "frame") { it.opts.mode = "engrave"; writeOpts(it.opts); }
+  refresh();
+};
+$("dupBtn").onclick = () => { const it = sel(); if (!it) return; const b = itemBox(it); const c = cloneItem(it, b.w + 10, 0); selectItem(c.id); };
+$("delBtn").onclick = () => { const it = sel(); if (it && confirm(`Remove “${it.name}” from the job?`)) removeItem(it.id); };
+$("copiesBtn").onclick = () => {
+  const it = sel(); if (!it) return;
+  wiz("Make copies", `<p>Copies of <b></b> in a grid, all cut in the same job.</p>
+    <label>Across <span><input id="cpX" type="number" value="3" min="1" max="20"></span></label>
+    <label>Back <span><input id="cpY" type="number" value="2" min="1" max="20"></span></label>
+    <label>Gap between them <span><input id="cpG" type="number" value="8" min="0" step="1"> mm</span></label>
+    <p class="hint">Tip: for coasters or keyrings, set the piece to Cut out first.</p>`,
+    [["Cancel", wizClose], ["Make copies", () => {
+      const nx = Math.max(1, +$("cpX").value | 0), ny = Math.max(1, +$("cpY").value | 0), gap = Math.max(0, +$("cpG").value || 0), b = itemBox(it);
+      for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) if (i || j) cloneItem(it, i * (b.w + gap), j * (b.h + gap));
+      wizClose(); selectItem(it.id);
+    }, "main"]]);
+  $("wizBody").querySelector("b").textContent = it.name;
+};
 
 // ================= Machine error codes (GRBL 1.1) =================
 const GRBL_ERRORS = {
@@ -1398,14 +1688,14 @@ function updateButtons() {
   $("gotoZeroBtn").disabled = !idle;
   $("zeroXYBtn").disabled = $("zeroZBtn").disabled = !idle;
   document.querySelectorAll("[data-jog]").forEach(b => b.disabled = !on || running || !(grblState === "Idle" || grblState === "Jog"));
-  $("startBtn").disabled = !idle || !design || grblState !== "Idle";
+  $("startBtn").disabled = !idle || !items.length || grblState !== "Idle";
   $("pauseBtn").disabled = !running;
   $("stopBtn").disabled = !on;
   $("readInfoBtn").disabled = !on || running;
   $("probeBtn").disabled = !idle || grblState !== "Idle";
   $("checkBtn").disabled = !on || running;
   $("resumeBtn").disabled = !idle || grblState !== "Idle";
-  $("saveBtn").disabled = !design;
+  $("saveBtn").disabled = !items.length;
   $("pauseBtn").textContent = paused ? "Resume" : "Pause";
 }
 
@@ -1547,13 +1837,23 @@ async function runJob(lines, meta, startAt = 0) {
 }
 
 $("startBtn").onclick = async () => {
-  const job = makeGcode(), air = job.S.air;
-  const ok = confirm(air
+  const J = buildJob(); if (!J.ops.length) return;
+  if (opIndex >= J.ops.length) opIndex = 0;
+  const op = J.ops[opIndex], multi = J.ops.length > 1, air = J.S.air;
+  const head = multi ? `STEP ${opIndex + 1} OF ${J.ops.length}: the ${BITS[op.bit].name} bit must be fitted.\n\n` : "";
+  const ok = confirm(head + (air
     ? "TEST RUN IN THE AIR\n\nThe bit stays above the wood. Watch that it moves where you expect.\n\nStart?"
-    : "Before cutting, check:\n\n• The wood is clamped down firmly\n• You set the start corner AND the surface\n• The bit is tight in the spindle\n• Safety glasses on, dust extraction on\n\nStart cutting?");
+    : "Before cutting, check:\n\n• The wood is clamped down firmly\n• You set the start corner AND the surface\n• The bit is tight in the spindle\n• Safety glasses on, dust extraction on\n\nStart cutting?"));
   if (!ok) return;
-  await runJob(jobLines(job.text), { name: design.name, minutes: job.minutes, plunge: job.S.plunge,
+  const done = await runJob(jobLines(op.text), { name: op.items.map(i => i.name).join(", "), minutes: op.minutes,
+    plunge: settingsFrom(op.items[0].opts).plunge,
     doneMsg: air ? "Test run finished. Untick the test box and press Start to cut for real." : null });
+  if (done && multi && opIndex < J.ops.length - 1) {
+    opIndex++; renderOps();
+    const msg = `Step ${opIndex} done. Next: switch the spindle off, change to the ${BITS[J.ops[opIndex].bit].name} bit, ` +
+      `then set the SURFACE again (touch plate or by eye). Don't change the start corner. Then press Start for step ${opIndex + 1}.`;
+    $("progText").textContent = msg; alert(msg);
+  }
 };
 
 $("resumeBtn").onclick = async () => {
@@ -1731,7 +2031,7 @@ function buildReport() {
   r.push(...(keys.length ? keys.map(k => `$${k}=${diag.settings[k]}${SETTING_NAMES[k] ? "  (" + SETTING_NAMES[k] + ")" : ""}`) : ["not read yet (connect, then press Read machine settings)"]));
   if (diag.info.length) r.push("", "-- Machine info --", ...diag.info);
   r.push("", "-- Job --");
-  r.push(design ? `Design: ${design.name}, ${$("width").value} mm wide at ${$("offX").value},${$("offY").value}` : "No design");
+  r.push(items.length ? items.map(it => `Piece: ${it.name}, ${MODE_NAMES[it.opts.mode]}, ${BITS[it.opts.bit].name}, ${fmt(it.w)} mm wide at ${fmt(it.x)},${fmt(it.y)}, turned ${it.rot}°`).join("\n") : "No design");
   r.push(`Mode ${S.mode}, depth ${fmt(S.total)} mm, ${MATERIALS[$("material").value].name}, ${BITS[$("bit").value].name}`);
   r.push(`Feed ${S.feed}, plunge ${S.plunge}, step ${S.step}, spindle ${S.spindle}, safe ${S.safe}, test run ${S.air}`);
   r.push("", "-- Last commands sent --", ...(diag.sent.length ? diag.sent : ["none"]));
@@ -1755,7 +2055,7 @@ let installPrompt = null;
 window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installPrompt = e; $("installBtn").hidden = false; });
 $("installBtn").onclick = async () => { if (!installPrompt) return; installPrompt.prompt(); await installPrompt.userChoice; installPrompt = null; $("installBtn").hidden = true; };
 
-window.EasyCarve = { loadSvgText, makeGcode, makeTextDesign, setDesign, buildReport, explain, onLine, resumePlan, jobLines };
+window.EasyCarve = { items: () => items, buildJob, selectItem, addItem, shapeDesign, loadSvgText, makeGcode, makeTextDesign, setDesign, buildReport, explain, onLine, resumePlan, jobLines };
 </script>
 </body>
 </html>
