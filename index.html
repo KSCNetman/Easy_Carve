@@ -91,13 +91,15 @@
   .samples { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; }
   .samples button { padding: 6px; display: flex; flex-direction: column; gap: 4px; align-items: center; font-size: 15px; }
   .samples img { width: 100%; aspect-ratio: 1.41; object-fit: contain; background: #fff; border-radius: 6px; }
+  #simDlg button.main { background: var(--accent); color: #fff; border: none; }
+  #simCanvas { image-rendering: auto; }
   #busy { position: fixed; inset: auto 20px 20px auto; background: #1d1d1f; color: #fff; padding: 8px 14px; border-radius: 8px; display: none; }
 </style>
 </head>
 <body>
 <header>
   <h1>Easy Carve</h1>
-  <span class="hint">for Genmitsu PROVerXL 4030 · v0.10</span>
+  <span class="hint">for Genmitsu PROVerXL 4030 · v0.11</span>
   <a href="quick-guide.pdf" target="_blank" class="hint" style="margin-left:auto">Quick guide (PDF)</a>
   <button id="installBtn" hidden style="padding:6px 12px">Install on this computer</button>
   <span id="connBadge" style="margin-left:0">Machine not connected</span>
@@ -167,6 +169,14 @@
     <label>Gap from left edge <span><input id="offX" type="number" value="10" step="1"> mm</span></label>
     <label>Gap from front edge <span><input id="offY" type="number" value="10" step="1"> mm</span></label>
     <label>Turn it <span><input id="rot" type="number" value="0" step="15"> °</span></label>
+    <details id="boardBox"><summary>My piece of wood (size check &amp; centring)</summary>
+      <label class="check"><input type="checkbox" id="boardOn"><span>Show my wood on the picture and check the job fits</span></label>
+      <label>Width (left to right) <span><input id="boardW" type="number" value="300" min="10"> mm</span></label>
+      <label>Depth (front to back) <span><input id="boardH" type="number" value="200" min="10"> mm</span></label>
+      <label>Thickness <span><input id="boardT" type="number" value="18" min="1" step="0.5"> mm</span></label>
+      <div class="hint">Set the start corner on the front-left corner of the wood.</div>
+      <div class="row"><button id="centreBtn">Centre the job on my wood</button></div>
+    </details>
   </div>
 
   <div class="step">
@@ -216,6 +226,7 @@
       <label>Lift height between cuts <span><input id="safe" type="number" value="5" step="1"> mm</span></label>
     </details>
     <div id="estimate" class="hint"></div>
+    <button id="previewBtn" class="big" style="background:#6e40c9;margin:6px 0" disabled>👀 Preview the finished piece</button>
     <div id="boundsWarn" class="warn" hidden></div>
     <button id="saveBtn" disabled>Save G-code file (to use in other software)</button>
   </div>
@@ -284,11 +295,23 @@
 
 <div id="hiddenSvg"></div>
 <div id="busy">Working…</div>
+<dialog id="simDlg" style="max-width:1100px">
+  <h2>What it will look like</h2>
+  <div style="position:relative;height:58vh;background:#f2f0ec;border-radius:10px;display:flex;align-items:center;justify-content:center;overflow:hidden">
+    <canvas id="simCanvas" style="max-width:100%;max-height:100%"></canvas>
+    <canvas id="sim3d" hidden style="width:100%;height:100%;cursor:grab;touch-action:none"></canvas>
+  </div>
+  <progress id="simProg" value="0" max="1"></progress>
+  <div id="simText" class="hint"></div>
+  <label>Speed <input id="simSpeed" type="range" min="1" max="100" value="25"></label>
+  <div class="row"><button id="simReplay">▶ Play again</button><button id="simEnd">⏭ Jump to the end</button><button id="simView" class="main">Turn it round in 3D</button><button id="simClose">Close</button></div>
+  <div id="simNote" class="hint">This is worked out from the real cutting instructions, with the real bit shapes.</div>
+</dialog>
 <dialog id="wiz"><h2 id="wizTitle"></h2><div id="wizBody"></div><div class="row" id="wizBtns"></div></dialog>
 
 <script>
 "use strict";
-const APP = "Easy Carve v0.10";
+const APP = "Easy Carve v0.11";
 const $ = id => document.getElementById(id);
 
 // ================= Presets =================
@@ -1638,6 +1661,211 @@ function makeInlay() {
 
 $("inlayBtn").onclick = () => makeInlay();
 
+// ================= My piece of wood =================
+const board = { on: false, w: 300, h: 200, t: 18 };
+function readBoard() {
+  board.on = $("boardOn").checked; board.w = Math.max(10, +$("boardW").value || 300);
+  board.h = Math.max(10, +$("boardH").value || 200); board.t = Math.max(1, +$("boardT").value || 18);
+}
+function drawBoard(ctx, X, Y, sc) {
+  if (!board.on) return;
+  ctx.fillStyle = "rgba(214,170,118,.28)"; ctx.fillRect(X(0), Y(board.h), board.w * sc, board.h * sc);
+  ctx.strokeStyle = "#b07d3a"; ctx.lineWidth = 1.5; ctx.strokeRect(X(0), Y(board.h), board.w * sc, board.h * sc);
+  ctx.fillStyle = "#8a5a1e"; ctx.font = "12px system-ui"; ctx.fillText(`Your wood ${board.w} × ${board.h} × ${board.t} mm`, X(0) + 6, Y(board.h) + 15);
+}
+function boardWarnings() {
+  if (!board.on || !items.length) return [];
+  const m = [], [x0, y0, x1, y1] = jobBounds(false);
+  if (x0 < -0.01 || y0 < -0.01 || x1 > board.w + 0.01 || y1 > board.h + 0.01) m.push("Part of the job is off your piece of wood. Make it smaller, move it, or press 'Centre the job on my wood'.");
+  else if (x0 < 10 || y0 < 10 || board.w - x1 < 10 || board.h - y1 < 10) m.push("The job comes within 10 mm of the wood's edge: leave room for the clamps (or screw the wood down outside the job).");
+  for (const it of items) {
+    const S = settingsFrom(it.opts);
+    if (it.opts.mode === "cut" && Math.abs(+it.opts.thick - board.t) > 0.01) m.push(`${it.name}: cut-out thickness is ${it.opts.thick} mm but your wood is ${board.t} mm (change it under "How to cut it").`);
+    if (it.opts.mode !== "cut" && it.opts.mode !== "inlayM" && S.total > board.t - 2) m.push(`${it.name}: that's nearly through your ${board.t} mm wood.`);
+  }
+  return m;
+}
+function centreOnBoard() {
+  readBoard(); if (!items.length) return;
+  const [x0, y0, x1, y1] = jobBounds(false), dx = (board.w - (x1 - x0)) / 2 - x0, dy = (board.h - (y1 - y0)) / 2 - y0;
+  for (const it of items) { it.x = Math.round((it.x + dx) * 2) / 2; it.y = Math.round((it.y + dy) * 2) / 2; }
+  for (const it of items) if (it.opts.mode === "cut") it.opts.thick = board.t;
+  selectItem(selId);
+}
+
+// ================= Simulation: carve the real G-code into a height map =================
+function simulateJob() {
+  const air = $("airRun").checked; $("airRun").checked = false;
+  let J; try { J = buildJob(); } finally { $("airRun").checked = air; }
+  const ops = J.ops.filter(o => !o.plug);
+  let [x0, y0, x1, y1] = jobBounds(false);
+  if (board.on) { x0 = Math.min(x0, 0); y0 = Math.min(y0, 0); x1 = Math.max(x1, board.w); y1 = Math.max(y1, board.h); }
+  x0 -= 6; y0 -= 6; x1 += 6; y1 += 6;
+  const res = Math.min(8, Math.max(2, Math.sqrt(1.4e6 / ((x1 - x0) * (y1 - y0)))));
+  const W = Math.ceil((x1 - x0) * res), H = Math.ceil((y1 - y0) * res);
+  const hm = new Float32Array(W * H);                     // 0 = top of the wood
+  const thick = board.on ? board.t : Math.max(6, ...items.filter(i => i.opts.mode === "cut").map(i => +i.opts.thick + 0.5), J.maxDepth + 3);
+  // moves from every step, each with its bit's shape
+  const moves = [];
+  for (const op of ops) {
+    const bit = BITS[op.bit], half = (bit.angle || 60) * Math.PI / 360;
+    const r = bit.vbit ? Math.max(0.2, op.maxDepth * Math.tan(half) + 0.2) : bit.dia / 2;
+    const rp = Math.max(1, Math.ceil(r * res)), ker = [];
+    for (let dy = -rp; dy <= rp; dy++) for (let dx = -rp; dx <= rp; dx++) {
+      const d = Math.hypot(dx, dy) / res; if (d > r + 0.5 / res) continue;
+      const off = bit.vbit ? d / Math.tan(half) : bit.ball ? r - Math.sqrt(Math.max(0, r * r - d * d)) : 0;
+      ker.push(dy * W + dx, dx, dy, off);
+    }
+    let x = 0, y = 0, z = 5;
+    for (const ln of op.text.split("\n")) {
+      if (!/^G[01]\b/.test(ln)) continue;
+      let m, nx = x, ny = y, nz = z;
+      if ((m = ln.match(/X(-?[\d.]+)/))) nx = +m[1]; if ((m = ln.match(/Y(-?[\d.]+)/))) ny = +m[1]; if ((m = ln.match(/Z(-?[\d.]+)/))) nz = +m[1];
+      if (Math.min(z, nz) < 0) moves.push([x, y, z, nx, ny, nz, ker]);
+      x = nx; y = ny; z = nz;
+    }
+  }
+  const toPx = (x, y) => [(x - x0) * res, (y1 - y) * res];
+  let done = 0;
+  const stampTo = upto => {
+    for (; done < Math.min(upto, moves.length); done++) {
+      const [ax, ay, az, bx, by, bz, ker] = moves[done], [px0, py0] = toPx(ax, ay), [px1, py1] = toPx(bx, by);
+      const n = Math.max(1, Math.ceil(Math.hypot(px1 - px0, py1 - py0) / 0.7));
+      for (let s = 0; s <= n; s++) {
+        const t = s / n, cx = Math.round(px0 + (px1 - px0) * t), cy = Math.round(py0 + (py1 - py0) * t), cz = az + (bz - az) * t;
+        if (cz >= 0) continue;
+        const base = cy * W + cx;
+        for (let k = 0; k < ker.length; k += 4) {
+          const xx = cx + ker[k + 1], yy = cy + ker[k + 2];
+          if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue;
+          const v = cz + ker[k + 3], i = base + ker[k];
+          if (v < hm[i]) hm[i] = v;
+        }
+      }
+    }
+  };
+  return { hm, W, H, res, x0, y1, thick, moves, stampTo, get done() { return done; }, reset() { hm.fill(0); done = 0; }, note: J.ops.some(o => o.plug) ? "The inlay plug (second wood) isn't shown." : "" };
+}
+
+// material colours: [top surface, freshly cut]
+const LOOKS = { pine: [[226, 190, 140], [238, 210, 165]], ply: [[222, 190, 145], [236, 212, 170]], mdf: [[170, 128, 88], [150, 110, 75]],
+  hard: [[150, 100, 62], [175, 125, 80]], acrylic: [[30, 30, 30], [235, 235, 235]], carving: [[222, 196, 160], [236, 214, 182]],
+  slate: [[58, 62, 70], [165, 170, 178]], corian: [[245, 245, 240], [235, 235, 230]], alu: [[190, 194, 200], [225, 228, 232]] };
+
+function renderSim(sim, canvas) {
+  const { hm, W, H, res, thick } = sim, c = canvas.getContext("2d"), id = c.createImageData(W, H);
+  const [top, cut] = LOOKS[$("material").value] || LOOKS.pine, wood = !["acrylic", "slate", "corian", "alu"].includes($("material").value);
+  for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+    const i = y * W + x, h = hm[i], o = i * 4;
+    if (h <= -thick) { id.data[o] = 40; id.data[o + 1] = 44; id.data[o + 2] = 52; id.data[o + 3] = 255; continue; }   // cut right through
+    const gx = (hm[i + 1] - hm[i - 1]) * res / 2, gy = (hm[i - W] - hm[i + W]) * res / 2;
+    const sh = Math.max(0, (gx * 0.5 - gy * 0.5 + 1) / Math.sqrt(gx * gx + gy * gy + 1) / 1.22);
+    const k = 0.45 + 0.6 * sh, col = h < -0.02 ? cut : top;
+    const grain = wood ? 1 + 0.07 * Math.sin((y / res) * 1.9 + 4 * Math.sin(x / res * 0.05) + 2 * Math.sin(y / res * 0.31)) : 1;
+    const depthShade = h < -0.02 ? 1 - Math.min(0.25, -h * 0.03) : 1;
+    for (let ch = 0; ch < 3; ch++) id.data[o + ch] = Math.min(255, col[ch] * k * grain * depthShade);
+    id.data[o + 3] = 255;
+  }
+  canvas.width = W; canvas.height = H; c.putImageData(id, 0, 0);
+}
+
+// ----- 3D view (WebGL) -----
+function view3d(sim, canvas) {
+  const gl = canvas.getContext("webgl", { antialias: true }); if (!gl) return null;
+  const step = Math.max(1, Math.ceil(Math.max(sim.W, sim.H) / 320)), nx = Math.floor((sim.W - 1) / step) + 1, ny = Math.floor((sim.H - 1) / step) + 1;
+  const [top, cut] = LOOKS[$("material").value] || LOOKS.pine, wood = !["acrylic", "slate", "corian", "alu"].includes($("material").value);
+  const pos = new Float32Array(nx * ny * 3), nor = new Float32Array(nx * ny * 3), col = new Float32Array(nx * ny * 3);
+  const H = (x, y) => { x = Math.min(sim.W - 1, Math.max(0, x)); y = Math.min(sim.H - 1, Math.max(0, y)); return Math.max(-sim.thick, sim.hm[y * sim.W + x]); };
+  const cx = sim.W / sim.res / 2, cy = sim.H / sim.res / 2;
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    const x = i * step, y = j * step, k = (j * nx + i) * 3, h = H(x, y);
+    pos[k] = x / sim.res - cx; pos[k + 1] = cy - y / sim.res; pos[k + 2] = h;
+    const gx = (H(x + step, y) - H(x - step, y)) * sim.res / (2 * step), gy = (H(x, y - step) - H(x, y + step)) * sim.res / (2 * step), l = Math.hypot(gx, gy, 1);
+    nor[k] = -gx / l; nor[k + 1] = -gy / l; nor[k + 2] = 1 / l;
+    const through = h <= -sim.thick + 0.01, c = through ? [40, 44, 52] : h < -0.02 ? cut : top;
+    const grain = wood && !through ? 1 + 0.07 * Math.sin((y / sim.res) * 1.9 + 4 * Math.sin(x / sim.res * 0.05)) : 1;
+    col[k] = c[0] / 255 * grain; col[k + 1] = c[1] / 255 * grain; col[k + 2] = c[2] / 255 * grain;
+  }
+  const idx = new Uint32Array((nx - 1) * (ny - 1) * 6); let q = 0;
+  for (let j = 0; j < ny - 1; j++) for (let i = 0; i < nx - 1; i++) { const a = j * nx + i, b = a + 1, c = a + nx, d = c + 1; idx.set([a, c, b, b, c, d], q); q += 6; }
+  gl.getExtension("OES_element_index_uint");
+  const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); return s; };
+  const prog = gl.createProgram();
+  gl.attachShader(prog, sh(gl.VERTEX_SHADER, `attribute vec3 p; attribute vec3 n; attribute vec3 c; uniform mat4 m; varying vec3 vn; varying vec3 vc;
+    void main(){ gl_Position = m * vec4(p, 1.0); vn = n; vc = c; }`));
+  gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, `precision mediump float; varying vec3 vn; varying vec3 vc; uniform vec3 L;
+    void main(){ float d = max(dot(normalize(vn), L), 0.0); gl_FragColor = vec4(vc * (0.35 + 0.75 * d), 1.0); }`));
+  gl.linkProgram(prog); gl.useProgram(prog);
+  const buf = (data, name) => { const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+    const loc = gl.getAttribLocation(prog, name); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 3, gl.FLOAT, false, 0, 0); };
+  buf(pos, "p"); buf(nor, "n"); buf(col, "c");
+  const ib = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
+  gl.enable(gl.DEPTH_TEST);
+  let yaw = -0.35, pitch = 0.75, dist = Math.max(cx, cy) * 3.6;
+  const mul = (a, b) => { const o = new Float32Array(16); for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) { let s = 0; for (let k = 0; k < 4; k++) s += a[k * 4 + j] * b[i * 4 + k]; o[i * 4 + j] = s; } return o; };
+  const render = () => {
+    const w = canvas.clientWidth, h = canvas.clientHeight, dpr = window.devicePixelRatio || 1;
+    canvas.width = w * dpr; canvas.height = h * dpr; gl.viewport(0, 0, canvas.width, canvas.height);
+    gl.clearColor(0.95, 0.94, 0.92, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    const f = 1 / Math.tan(0.4), a = w / h, near = 1, far = dist * 4;
+    const P = new Float32Array([f / a, 0, 0, 0, 0, f, 0, 0, 0, 0, (far + near) / (near - far), -1, 0, 0, 2 * far * near / (near - far), 0]);
+    const cyw = Math.cos(yaw), syw = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+    const Rz = new Float32Array([cyw, syw, 0, 0, -syw, cyw, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+    const Rx = new Float32Array([1, 0, 0, 0, 0, cp, sp, 0, 0, -sp, cp, 0, 0, 0, 0, 1]);
+    const T = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, -dist, 1]);
+    gl.uniformMatrix4fv(gl.getUniformLocation(prog, "m"), false, mul(P, mul(T, mul(Rx, Rz))));
+    const lx = -0.4, ly = 0.5, lz = 0.77; gl.uniform3f(gl.getUniformLocation(prog, "L"), lx, ly, lz);
+    gl.drawElements(gl.TRIANGLES, idx.length, gl.UNSIGNED_INT, 0);
+  };
+  let dragAt = null;
+  canvas.onpointerdown = e => { dragAt = [e.clientX, e.clientY]; canvas.setPointerCapture(e.pointerId); };
+  canvas.onpointermove = e => { if (!dragAt) return; yaw += (e.clientX - dragAt[0]) * 0.008; pitch = Math.min(1.5, Math.max(0, pitch - (e.clientY - dragAt[1]) * 0.008)); dragAt = [e.clientX, e.clientY]; render(); };
+  canvas.onpointerup = () => { dragAt = null; };
+  canvas.onwheel = e => { e.preventDefault(); dist = Math.max(20, dist * (e.deltaY > 0 ? 1.1 : 0.9)); render(); };
+  render();
+  return { render };
+}
+
+// ----- the preview window -----
+let simState = null, simTimer = null;
+async function openPreview() {
+  if (!items.length) return;
+  busy(true); await nextFrame();
+  try { simState = simulateJob(); } catch (err) { busy(false); return alert("Sorry, the preview failed: " + err.message); }
+  busy(false);
+  const dlg = $("simDlg"); dlg.showModal();
+  $("simNote").textContent = simState.note;
+  $("simProg").max = simState.moves.length; $("simProg").value = 0;
+  show2d(); simState.reset(); renderSim(simState, $("simCanvas")); playSim(true);
+}
+function show2d() { $("simCanvas").hidden = false; $("sim3d").hidden = true; $("simView").textContent = "Turn it round in 3D"; }
+function playSim(fromStart) {
+  clearInterval(simTimer);
+  if (fromStart) simState.reset();
+  show2d();
+  const total = simState.moves.length, perTick = () => Math.max(1, Math.round(total * (+$("simSpeed").value) / 2000));
+  simTimer = setInterval(() => {
+    simState.stampTo(simState.done + perTick());
+    renderSim(simState, $("simCanvas")); $("simProg").value = simState.done;
+    $("simText").textContent = `${Math.round(simState.done / Math.max(1, total) * 100)}% cut`;
+    if (simState.done >= total) { clearInterval(simTimer); $("simText").textContent = "Finished – drag in 3D view to look round it"; }
+  }, 40);
+}
+function finishSim() { clearInterval(simTimer); simState.stampTo(simState.moves.length); renderSim(simState, $("simCanvas")); $("simProg").value = simState.done; $("simText").textContent = "Finished"; }
+
+["boardOn", "boardW", "boardH", "boardT"].forEach(id => $(id).addEventListener("input", () => { readBoard(); refresh(); }));
+$("boardOn").addEventListener("change", () => { readBoard(); refresh(); });
+$("centreBtn").onclick = () => { $("boardOn").checked = true; centreOnBoard(); };
+$("previewBtn").onclick = () => openPreview();
+$("simReplay").onclick = () => playSim(true);
+$("simEnd").onclick = () => finishSim();
+$("simClose").onclick = () => { clearInterval(simTimer); $("simDlg").close(); };
+$("simView").onclick = () => {
+  if ($("sim3d").hidden) { clearInterval(simTimer); $("simCanvas").hidden = true; $("sim3d").hidden = false; $("simView").textContent = "Back to the flat view";
+    if (!view3d(simState, $("sim3d"))) { alert("3D view isn't available in this browser."); show2d(); } }
+  else { show2d(); renderSim(simState, $("simCanvas")); }
+};
+
 // ================= Ready-made projects & jigsaw puzzles =================
 // outlines in mm (Y down, like a drawing)
 const G = {
@@ -1987,6 +2215,7 @@ function updateButtons() {
   $("checkBtn").disabled = !on || running;
   $("resumeBtn").disabled = !idle || grblState !== "Idle";
   $("saveBtn").disabled = !items.length;
+  $("previewBtn").disabled = !items.length;
   $("pauseBtn").textContent = paused ? "Resume" : "Pause";
 }
 
@@ -2284,7 +2513,7 @@ $("wizResume").onclick = () => wizSquareCut();
 
 // ----- remember settings between visits -----
 const KEEP = ["material", "bit", "depth", "thick", "skin", "exact", "feed", "plunge", "stepdown", "spindle", "safe", "rH", "rRound",
-              "rBorder", "rLines", "rLineD", "rFinish", "plateT", "width", "offX", "offY", "detail", "imgKind", "fontSel", "boldIn"];
+              "rBorder", "rLines", "rLineD", "rFinish", "plateT", "boardOn", "boardW", "boardH", "boardT", "width", "offX", "offY", "detail", "imgKind", "fontSel", "boldIn"];
 function saveSettings() {
   try {
     const o = { mode: mode() };
@@ -2344,13 +2573,14 @@ $("copyReportBtn").onclick = async () => {
 window.addEventListener("beforeunload", e => { if (running) { e.preventDefault(); e.returnValue = ""; } });
 
 if (!loadSettings()) applyPreset(); else refresh();
+readBoard();
 // ----- website extras: works offline, can be installed like an app -----
 if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) navigator.serviceWorker.register("sw.js").catch(() => {});
 let installPrompt = null;
 window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installPrompt = e; $("installBtn").hidden = false; });
 $("installBtn").onclick = async () => { if (!installPrompt) return; installPrompt.prompt(); await installPrompt.userChoice; installPrompt = null; $("installBtn").hidden = true; };
 
-window.EasyCarve = { items: () => items, makeInlay, inlayMaleModel, startProject, jigsawDesign, PROJECTS, buildJob, selectItem, addItem, shapeDesign, loadSvgText, makeGcode, makeTextDesign, setDesign, buildReport, explain, onLine, resumePlan, jobLines };
+window.EasyCarve = { items: () => items, sim: () => simState, simulateJob, openPreview, finishSim, centreOnBoard, board, makeInlay, inlayMaleModel, startProject, jigsawDesign, PROJECTS, buildJob, selectItem, addItem, shapeDesign, loadSvgText, makeGcode, makeTextDesign, setDesign, buildReport, explain, onLine, resumePlan, jobLines };
 </script>
 </body>
 </html>
