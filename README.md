@@ -22,4 +22,5 @@ Always do a *Test run in the air* first, clamp the work, wear safety glasses and
 | `index.html` | The whole app (single file) |
 | `sw.js`, `manifest.webmanifest`, `icon-*.png` | Offline / install support |
 | `quick-guide.pdf` | Printable 2-page guide |
+| `drawings/` | Dad's hare and Welsh dragon drawings — one-click samples in the app |
 | `tests/machine-sim.test.js` | Playwright test against a simulated GRBL controller |
