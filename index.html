@@ -115,13 +115,14 @@
   #simCanvas { image-rendering: auto; }
   .diaryEntry { border-top: 1px solid var(--line); padding: 8px 0; }
   .diaryEntry textarea { font-size: 14px; margin: 4px 0; }
+  [data-rtool].sel { background: #eef4ff; border-color: var(--accent); font-weight: 600; }
   #busy { position: fixed; inset: auto 20px 20px auto; background: #1d1d1f; color: #fff; padding: 8px 14px; border-radius: 8px; display: none; }
 </style>
 </head>
 <body>
 <header>
   <h1>Easy Carve</h1>
-  <span class="hint">for Genmitsu PROVerXL 4030 · v1.2</span>
+  <span class="hint">for Genmitsu PROVerXL 4030 · v1.3</span>
   <a href="quick-guide.pdf" target="_blank" class="hint" style="margin-left:auto">Quick guide (PDF)</a>
   <button id="installBtn" hidden style="padding:6px 12px">Install on this computer</button>
   <span id="connBadge" style="margin-left:0">Machine not connected</span>
@@ -192,7 +193,7 @@
           <option value="star">Star</option><option value="tree">Christmas tree</option><option value="tag">Tag / bookmark</option><option value="frame">Border frame</option>
           <option value="jigsaw">🧩 Jigsaw puzzle over the selected piece</option></select>
       </div>
-      <div class="row small"><button id="dupBtn">Duplicate</button><button id="copiesBtn">Copies…</button><button id="delBtn">Remove</button></div>
+      <div class="row small"><button id="upBtn" title="Move earlier (lower layer)">▲</button><button id="downBtn" title="Move later (higher layer)">▼</button><button id="dupBtn">Duplicate</button><button id="copiesBtn">Copies…</button><button id="delBtn">Remove</button></div>
       <div class="hint" id="alignHint" style="margin-top:6px">Line up this piece <span id="alignOn"></span> (or drag it – it snaps into line):</div>
       <div class="row small"><button data-align="x" title="Centre left to right">⇹ Across</button><button data-align="y" title="Centre front to back">⇕ Up/down</button><button data-align="xy">✛ Centre</button></div>
       <div class="row small"><button data-align="left">⇤ Left</button><button data-align="right">Right ⇥</button><button data-align="spread" title="Space all pieces evenly across">↔ Spread</button></div>
@@ -207,6 +208,7 @@
       <label>Width (left to right) <span><input id="boardW" type="number" value="300" min="10"> mm</span></label>
       <label>Depth (front to back) <span><input id="boardH" type="number" value="200" min="10"> mm</span></label>
       <label>Thickness <span><input id="boardT" type="number" value="18" min="1" step="0.5"> mm</span></label>
+      <label class="check"><input type="checkbox" id="boardFull"><span>3D carving fills the whole piece of wood (no flat rim)</span></label>
       <div class="hint">Set the start corner on the front-left corner of the wood.</div>
       <div class="row"><button id="centreBtn">Centre the job on my wood</button></div>
     </details>
@@ -230,7 +232,14 @@
       <label>How tall it stands <span><input id="rH" type="number" value="4" min="0.5" step="0.5"> mm</span></label>
       <label>How rounded the edges <span><input id="rRound" type="number" value="6" min="0" step="1"> mm</span></label>
       <div class="hint">0 = straight sides like a stamp; bigger = softer, more domed.</div>
+      <label id="rShadeRow">Pencil shading shapes it <span><small>none</small><input id="rShade" type="range" min="0" max="100" step="5" value="0"><small>lots</small></span></label>
+      <label id="rShadeDirRow">Darker shading is <select id="rShadeDir"><option value="lower">lower (pushed in)</option><option value="higher">higher (stands out)</option></select></label>
       <label>Border around it <span><input id="rBorder" type="number" value="8" min="3" step="1"> mm</span></label>
+      <label>This layer <select id="rCombine"><option value="top">sits on top of what's under it</option><option value="merge">merges (highest wins)</option><option value="cut">cuts down into what's under it</option></select></label>
+      <label>Lifted up by <span><input id="rBase" type="number" value="0" min="0" step="0.5"> mm</span></label>
+      <div class="row small"><button id="rEditBtn">✏️ Shape the heights by area…</button><button id="rFitBtn">📏 Fit to my wood</button></div>
+      <label class="check"><input type="checkbox" id="rRough" checked><span>Rough it out first with the 6 mm flat bit – much faster (it stops once to change to the ball-nose)</span></label>
+      <div class="hint">3D pieces are layers: they build up in the order of the pieces list (use ▲▼ in 1 Design to change it).</div>
       <label id="rLinesRow" class="check"><input type="checkbox" id="rLines" checked><span>Carve the drawing's lines into the surface</span></label>
       <label>Line depth <span><input id="rLineD" type="number" value="1" min="0.2" step="0.2"> mm</span></label>
       <label>Finish <select id="rFinish">
@@ -338,6 +347,29 @@
 
 <div id="hiddenSvg"></div>
 <div id="busy">Working…</div>
+<dialog id="reliefDlg" style="max-width:980px">
+  <h2 id="rEdTitle">Shape the heights</h2>
+  <div style="display:grid;grid-template-columns:1fr 300px;gap:16px">
+    <div style="background:#eee;border-radius:10px;display:flex;align-items:center;justify-content:center;min-height:52vh">
+      <canvas id="rEdCanvas" style="max-width:100%;max-height:60vh;cursor:crosshair;touch-action:none"></canvas></div>
+    <div>
+      <div class="hint">Choose a tool, then click or drag on the picture:</div>
+      <div class="row small"><button data-rtool="pick">👆 Pick an area</button><button data-rtool="raise">⬆ Raise</button></div>
+      <div class="row small"><button data-rtool="lower">⬇ Lower</button><button data-rtool="smooth">〰 Smooth</button></div>
+      <div class="row small"><button data-rtool="lasso">✏️ Circle an area</button><button data-rtool="erase">🧽 Undo brushing</button></div>
+      <div id="rEdArea" class="warn" hidden><b>This area</b> (highlighted)
+        <label>Height <span><input id="rEdScale" type="range" min="0" max="250" step="5" value="100"><small id="rEdScaleOut">100%</small></span></label>
+        <label>Lift / sink <span><input id="rEdAdd" type="range" min="-6" max="6" step="0.5" value="0"><small id="rEdAddOut">0 mm</small></span></label>
+        <div class="row small"><button id="rEdAreaReset">Reset this area</button></div>
+      </div>
+      <label>Brush size <span><input id="rEdSize" type="range" min="2" max="40" step="1" value="10"></span></label>
+      <label>Brush strength <span><input id="rEdStrength" type="range" min="5" max="100" step="5" value="35"></span></label>
+      <p id="rEdMax" class="hint"></p>
+      <p id="rEdShadeNote" class="hint">Tip: drawings opened as "a drawing – 3D raised carving" can also use their pencil shading for shape.</p>
+      <div class="row small"><button id="rEdReset">Reset all edits</button><button id="rEdDone" class="main" style="background:var(--accent);color:#fff;border:none">Done</button></div>
+    </div>
+  </div>
+</dialog>
 <dialog id="simDlg" style="max-width:1100px">
   <h2>What it will look like</h2>
   <div style="position:relative;height:58vh;background:#f2f0ec;border-radius:10px;display:flex;align-items:center;justify-content:center;overflow:hidden">
@@ -360,7 +392,7 @@
 
 <script>
 "use strict";
-const APP = "Easy Carve v1.2";
+const APP = "Easy Carve v1.3";
 const $ = id => document.getElementById(id);
 
 // ================= Presets =================
@@ -419,6 +451,8 @@ function showModeRows() {
   $("depthLabel").textContent = mode() === "vcarve" ? "Deepest it goes" : "How deep";
   const plug = mode() === "inlayM";
   $("inlayRows").hidden = !plug; $("plugModeLabel").hidden = !plug; $("inlayBtn").hidden = plug;
+  let hasShade = false; try { const cur = sel(); hasShade = !!(cur && shadeMap(cur.design)); } catch {}
+  $("rShadeRow").hidden = $("rShadeDirRow").hidden = !hasShade;
   if (plug) $("depthRow").hidden = true;
   $("vcHint").hidden = mode() !== "vcarve";
 }
@@ -433,10 +467,12 @@ document.querySelectorAll("input[name=mode]").forEach(r => r.onchange = () => {
   if (mode() === "vcarve" && !BITS[$("bit").value].vbit) { $("bit").value = "vbit"; applyPreset(); return; }
   syncFromDom(); refresh();
 });
-["width", "offX", "offY", "rot", "depth", "thick", "skin", "exact", "rH", "rRound", "rBorder", "rLines", "rLineD", "rFinish", "feed", "plunge", "stepdown", "spindle", "safe", "airRun"]
+["width", "offX", "offY", "rot", "rShade", "rBase", "depth", "thick", "skin", "exact", "rH", "rRound", "rBorder", "rLines", "rLineD", "rFinish", "feed", "plunge", "stepdown", "spindle", "safe", "airRun"]
   .forEach(id => $(id).addEventListener("input", () => { if (typeof syncFromDom === "function") syncFromDom(); refresh(); }));
 $("zoom").addEventListener("change", draw);
 $("rFinish").addEventListener("change", () => { syncFromDom(); refresh(); });
+["rShadeDir", "rCombine"].forEach(id => $(id).addEventListener("change", () => { syncFromDom(); refresh(); }));
+$("rRough").addEventListener("change", () => refresh());
 ["skin", "exact", "rLines"].forEach(id => $(id).addEventListener("change", () => { syncFromDom(); refresh(); }));
 
 $("tabFile").onclick = () => { $("tabFile").classList.add("sel"); $("tabText").classList.remove("sel"); $("paneFile").hidden = false; $("paneText").hidden = true; };
@@ -462,7 +498,7 @@ function normalize(raw, naturalMmPerUnit) {
     if (closed) pts[pts.length - 1] = pts[0].slice();
     return { pts, closed };
   });
-  return { id: ++designSeq, paths, w: Math.max(w, 1e-9), h: Math.max(h, 1e-9), naturalMm: naturalMmPerUnit ? w * naturalMmPerUnit : null };
+  return { id: ++designSeq, paths, w: Math.max(w, 1e-9), h: Math.max(h, 1e-9), naturalMm: naturalMmPerUnit ? w * naturalMmPerUnit : null, ox: minX, oyTop: maxY };
 }
 
 function polyArea(p) { let a = 0; for (let i = 0, j = p.length - 1; i < p.length; j = i++) a += (p[j][0] + p[i][0]) * (p[j][1] - p[i][1]); return a / 2; }
@@ -881,7 +917,7 @@ function processImage(src, name, firstTime) {
   d.source = src; setDesign(d, name);
   if (firstTime) {
     if (kind === "lines") { document.querySelector("input[value=engrave]").click(); $("bit").value = "vbit"; applyPreset(); }
-    else if (kind === "relief") document.querySelector("input[value=relief]").click();
+    else if (kind === "relief") { document.querySelector("input[value=relief]").click(); if (+$("rShade").value === 0) { $("rShade").value = 40; syncFromDom(); refresh(); } }
     else if (kind === "shape") { document.querySelector("input[value=cut]").click(); if (BITS[$("bit").value].vbit) { $("bit").value = "flat3"; applyPreset(); } }
     else if (mode() === "engrave") document.querySelector("input[value=pocket]").click();
   }
@@ -963,7 +999,8 @@ $("useTextBtn").onclick = async () => { busy(true); await nextFrame(); makeTextD
 // ================= Layout: several pieces on one job =================
 let items = [], selId = null, itemSeq = 0, pendingAdd = false;
 const sel = () => items.find(i => i.id === selId) || null;
-const OPT_IDS = ["bit", "depth", "thick", "skin", "exact", "feed", "plunge", "stepdown", "rH", "rRound", "rBorder", "rLines", "rLineD", "rFinish", "inS", "inP"];
+const OPT_IDS = ["bit", "depth", "thick", "skin", "exact", "feed", "plunge", "stepdown", "rH", "rRound", "rBorder", "rLines", "rLineD", "rFinish", "inS", "inP",
+                 "rShade", "rShadeDir", "rCombine", "rBase"];
 const MODE_NAMES = { engrave: "Engrave", vcarve: "V-carve", pocket: "Carve out", cut: "Cut out", relief: "3D raised", inlayM: "Inlay plug" };
 const MODE_ORDER = { engrave: 0, vcarve: 1, pocket: 2, relief: 3, cut: 9, inlayM: 10 };
 
@@ -1019,7 +1056,9 @@ function removeItem(id) {
   selectItem(items.length ? items[items.length - 1].id : null);
 }
 function cloneItem(it, dx, dy) {
-  const c = { ...it, id: ++itemSeq, opts: { ...it.opts }, x: it.x + dx, y: it.y + dy };
+  const c = { ...it, id: ++itemSeq, opts: { ...it.opts }, x: it.x + dx, y: it.y + dy,
+              relief: it.relief ? { regions: JSON.parse(JSON.stringify(it.relief.regions)), brush: it.relief.brush ? it.relief.brush.slice() : null, ver: it.relief.ver,
+                                    lassos: JSON.parse(JSON.stringify(it.relief.lassos || [])) } : undefined };
   items.push(c); return c;
 }
 
@@ -1044,6 +1083,7 @@ function renderItemList() {
     box.append(b);
   }
   $("dupBtn").disabled = $("copiesBtn").disabled = $("delBtn").disabled = !sel();
+  const at = items.findIndex(x => x.id === selId); $("upBtn").disabled = at <= 0; $("downBtn").disabled = at < 0 || at >= items.length - 1;
   if (typeof updateAlignHint === "function") updateAlignHint();
   $("openBtn").textContent = sel() ? "Swap the selected piece for another file…" : "Open design…";
   $("useTextBtn").textContent = sel() && sel().design.isText ? "Change this text" : "Use this text";
@@ -1088,7 +1128,7 @@ function localPaths(it) {
   const bw = Math.max(...corners.map(p => p[0])) - mx, bh = Math.max(...corners.map(p => p[1])) - my;
   const paths = d.paths.map(p => ({ closed: p.closed, pts: rdp(p.pts.map(q => { const [X, Y] = tf(q); return [X - mx, Y - my]; }), 0.02) }))
                        .filter(p => p.pts.length > 1);
-  const val = { paths, bw, bh };
+  const val = { paths, bw, bh, mx, my };
   if (localCache.size > 200) localCache.clear();
   localCache.set(key, val); return val;
 }
@@ -1228,47 +1268,324 @@ const fmt = v => { const s = (+v).toFixed(3).replace(/\.?0+$/, ""); return s ===
 
 // ================= 3D raised carving (relief) =================
 const reliefCache = new Map();
-function reliefModel(placed, S, bitKey, lkey) {
+// ================= 3D raised carving: layers, shading, heights by area =================
+// Every 3D piece is a layer. Layers combine (in the order of the pieces list) into one height map
+// that is carved in one go: background at the bottom, the highest point at the top of the wood.
+
+function reliefState(it) { if (!it.relief) it.relief = { regions: {}, brush: null, ver: 0 }; return it.relief; }
+
+// --- grid in the drawing's own coordinates: areas (regions) and brushed height edits live here,
+//     so they stay put when the piece is moved, resized or turned ---
+function editGrid(d) {
+  if (d._edit) return d._edit;
+  const k = 420 / Math.max(d.w, d.h), W = Math.ceil(d.w * k) + 4, H = Math.ceil(d.h * k) + 4;
+  const P = ([x, y]) => [2 + x * k, 2 + (d.h - y) * k];
+  const c = document.createElement("canvas"); c.width = W; c.height = H;
+  const g = c.getContext("2d", { willReadFrequently: true });
+  g.beginPath();
+  for (const p of d.paths) if (p.closed) p.pts.forEach((q, i) => { const [x, y] = P(q); i ? g.lineTo(x, y) : g.moveTo(x, y); });
+  g.fillStyle = "#000"; g.fill("evenodd");
+  const fill = g.getImageData(0, 0, W, H).data;
+  g.clearRect(0, 0, W, H); g.strokeStyle = "#000"; g.lineWidth = 3.2; g.lineCap = g.lineJoin = "round";
+  for (const p of d.paths) if (!p.closed) { g.beginPath(); p.pts.forEach((q, i) => { const [x, y] = P(q); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.stroke(); }
+  const lines = g.getImageData(0, 0, W, H).data;
+  const inside = new Uint8Array(W * H), open = new Uint8Array(W * H);
+  for (let i = 0; i < W * H; i++) { inside[i] = fill[i * 4 + 3] > 127 ? 1 : 0; open[i] = inside[i] && lines[i * 4 + 3] < 60 ? 1 : 0; }
+  // areas = parts of the shape separated by the drawing's lines
+  const label = new Int32Array(W * H), sizes = [0]; let n = 0;
+  for (let s = 0; s < W * H; s++) {
+    if (!open[s] || label[s]) continue;
+    n++; let cnt = 0; const st = [s]; label[s] = n;
+    while (st.length) { const i = st.pop(); cnt++; const x = i % W;
+      if (x > 0 && open[i - 1] && !label[i - 1]) { label[i - 1] = n; st.push(i - 1); }
+      if (x < W - 1 && open[i + 1] && !label[i + 1]) { label[i + 1] = n; st.push(i + 1); }
+      if (i >= W && open[i - W] && !label[i - W]) { label[i - W] = n; st.push(i - W); }
+      if (i < W * (H - 1) && open[i + W] && !label[i + W]) { label[i + W] = n; st.push(i + W); } }
+    sizes.push(cnt);
+  }
+  // line pixels and slivers join the nearest real area, so every bit of the shape belongs to one
+  const big = l => sizes[l] >= W * H * 0.0004;
+  for (let pass = 0; pass < 6; pass++) {
+    let changed = false;
+    for (let i = 0; i < W * H; i++) {
+      if (!inside[i] || (label[i] && big(label[i]))) continue;
+      const x = i % W; let best = 0;
+      for (const j of [i - 1, i + 1, i - W, i + W]) if (j >= 0 && j < W * H && Math.abs((j % W) - x) <= 1 && label[j] && big(label[j])) { best = label[j]; break; }
+      if (best) { label[i] = best; changed = true; }
+    }
+    if (!changed) break;
+  }
+  d._edit = { W, H, k, inside, label, n };
+  return d._edit;
+}
+
+// areas for one piece: the drawing's own areas plus any circled by hand (ids from 1000)
+function labelsOf(it) {
+  const E = editGrid(it.design), rs = reliefState(it);
+  if (!rs.lassos || !rs.lassos.length) return E.label;
+  if (rs._lab && rs._labVer === rs.ver) return rs._lab;
+  const lab = E.label.slice(), c = document.createElement("canvas"); c.width = E.W; c.height = E.H;
+  const g = c.getContext("2d", { willReadFrequently: true }), d = it.design;
+  for (const L of rs.lassos) {
+    g.clearRect(0, 0, E.W, E.H); g.beginPath();
+    L.pts.forEach(([u, v], i) => { const x = 2 + u * E.k, y = 2 + (d.h - v) * E.k; i ? g.lineTo(x, y) : g.moveTo(x, y); });
+    g.closePath(); g.fillStyle = "#000"; g.fill();
+    const m = g.getImageData(0, 0, E.W, E.H).data;
+    for (let i = 0; i < lab.length; i++) if (E.inside[i] && m[i * 4 + 3] > 127) lab[i] = L.id;
+  }
+  rs._lab = lab; rs._labVer = rs.ver; return lab;
+}
+
+// --- the drawing's pencil shading as 0 (paper) .. 1 (darkest), smoothed ---
+function shadeMap(d) {
+  const src = d.source;
+  if (!src || !src.pd || d.ox == null) return null;
+  if (!src.shade) {
+    const { d: dk, W, H } = src.pd, sm = boxBlur(boxBlur(dk, W, H, 3), W, H, 3);
+    const used = Array.from(sm).filter(v => v > 0.015).sort((a, b) => a - b);      // where there is pencil
+    const lo = used.length ? used[Math.floor(used.length * 0.1)] : 0, hi = used.length ? used[Math.floor(used.length * 0.97)] : 1;
+    for (let i = 0; i < sm.length; i++) sm[i] = Math.min(1, Math.max(0, (sm[i] - lo) / Math.max(1e-3, hi - lo)));
+    src.shade = { v: sm, W, H };
+  }
+  return src.shade;
+}
+function sampleShade(d, x, y) {                         // x, y in drawing units (Y up)
+  const S = shadeMap(d); if (!S) return 0;
+  const px = Math.round(x + d.ox), py = Math.round(d.oyTop - y);
+  return px < 0 || py < 0 || px >= S.W || py >= S.H ? 0 : S.v[py * S.W + px];
+}
+
+// --- height of one layer at a point, from its parts ---
+function layerHeight(o, rs, distMm, label, brush, shade, groove) {
+  const H = Math.max(0, +o.rH || 0), R = Math.max(0, +o.rRound || 0);
+  const t = R > 0 ? Math.min(1, Math.max(0, distMm) / R) : 1;
+  let h = H * Math.sqrt(Math.max(0, 1 - (1 - t) * (1 - t)));
+  const amt = Math.max(0, Math.min(100, +o.rShade || 0)) / 100;
+  if (amt > 0) h *= o.rShadeDir === "higher" ? 1 - amt * (1 - shade) : 1 - amt * shade;
+  const reg = label && rs.regions[label];
+  if (reg) h = h * (reg.scale ?? 1) + (reg.add || 0) * t;
+  h += brush || 0;
+  h -= groove;
+  return Math.max(0, h);
+}
+
+// inverse of the piece's placement: world mm -> drawing units
+function toDesign(it) {
+  const d = it.design, s = it.w / d.w, a = it.rot * Math.PI / 180, c = Math.cos(a), sn = Math.sin(a);
+  const L = localPaths(it), cx = d.w * s / 2, cy = d.h * s / 2;
+  return (X, Y) => {
+    const x1 = X - it.x + L.mx, y1 = Y - it.y + L.my;
+    let u = x1 * c + y1 * sn; const v = -x1 * sn + y1 * c;
+    if (it.mirror) u = -u;
+    return [(u + cx) / s, (v + cy) / s];
+  };
+}
+
+function rasterizeFrame(paths, x0, y1, W, H, res, stroke) {
+  const c = document.createElement("canvas"); c.width = W; c.height = H;
+  const g = c.getContext("2d", { willReadFrequently: true });
+  g.beginPath();
+  for (const p of paths) p.pts.forEach(([x, y], i) => { const px = (x - x0) * res, py = (y1 - y) * res; i ? g.lineTo(px, py) : g.moveTo(px, py); });
+  if (stroke) { g.strokeStyle = "#000"; g.lineWidth = stroke; g.lineCap = g.lineJoin = "round"; g.stroke(); } else { g.fillStyle = "#000"; g.fill("evenodd"); }
+  const data = g.getImageData(0, 0, W, H).data, m = new Uint8Array(W * H);
+  for (let i = 0; i < W * H; i++) m[i] = data[i * 4 + 3] > (stroke ? 60 : 127) ? 1 : 0;
+  return m;
+}
+
+const reliefCache2 = new Map();
+function reliefLayersKey(layers, bitKey) {
+  return JSON.stringify([bitKey, board.on, board.w, board.h, board.t, board.full,
+    layers.map(it => [localKey(it), it.id, it.x, it.y, it.opts.rH, it.opts.rRound, it.opts.rBorder, it.opts.rLines, it.opts.rLineD,
+      it.opts.rShade, it.opts.rShadeDir, it.opts.rCombine, it.opts.rBase, it.opts.rFinish, it.opts.stepdown, reliefState(it).ver])]);
+}
+
+// all the 3D layers of one step -> one carving
+function reliefCombined(layers, bitKey, rough) {
+  const key = reliefLayersKey(layers, bitKey) + (rough ? "|rough" : "");
+  if (reliefCache2.has(key)) return reliefCache2.get(key);
   const bit = BITS[bitKey], r = bit.dia / 2;
-  const key = JSON.stringify([lkey, bitKey, S.reliefH, S.round, S.border, S.lines, S.lineD, S.finish, S.step]);
-  if (reliefCache.has(key)) return reliefCache.get(key);
-  const closed = placed.filter(p => p.closed), open = placed.filter(p => !p.closed);
-  if (!closed.length) {
-    const val = { note: "3D raised carving needs a closed outline. For a drawing, choose 'a drawing – 3D raised carving' when opening it.", rows: [], rough: [] };
-    reliefCache.set(key, val); return val;
+  const withShape = layers.filter(it => localPaths(it).paths.some(p => p.closed));
+  if (!withShape.length) {
+    const val = { note: "3D raised carving needs a closed outline. For a drawing, choose 'a drawing – 3D raised carving' when opening it.", rows: [], rough: [], D: 0 };
+    reliefCache2.set(key, val); return val;
   }
-  let bx0 = Infinity, by0 = Infinity, bx1 = -Infinity, by1 = -Infinity;
-  for (const p of closed) for (const [x, y] of p.pts) { bx0 = Math.min(bx0, x); bx1 = Math.max(bx1, x); by0 = Math.min(by0, y); by1 = Math.max(by1, y); }
-  const B = S.border, D = S.reliefH;
-  const res = Math.min(8, Math.max(2, Math.sqrt(2.2e6 / ((bx1 - bx0 + 2 * B + 2 * r) * (by1 - by0 + 2 * B + 2 * r)))));
-  const R = rasterize(closed, B + r + 1, res), W = R.W, H = R.H;
-  const notIn = new Uint8Array(W * H); for (let i = 0; i < notIn.length; i++) notIn[i] = 1 - R.inside[i];
-  const dIn = edt(notIn, W, H), surf = new Float32Array(W * H), Rpx = Math.max(1e-6, S.round * res);
-  for (let i = 0; i < surf.length; i++) {
-    if (!R.inside[i]) { surf[i] = -D; continue; }
-    const t = S.round > 0 ? Math.min(1, (dIn[i] - 0.5) / Rpx) : 1;
-    surf[i] = -D + D * Math.sqrt(Math.max(0, 1 - (1 - t) * (1 - t)));
+  // area to carve: around the layers, or the whole piece of wood
+  let ax0 = Infinity, ay0 = Infinity, ax1 = -Infinity, ay1 = -Infinity;
+  for (const it of withShape) { const b = itemBox(it), B = Math.max(3, +it.opts.rBorder || 8);
+    ax0 = Math.min(ax0, b.x - B); ay0 = Math.min(ay0, b.y - B); ax1 = Math.max(ax1, b.x + b.w + B); ay1 = Math.max(ay1, b.y + b.h + B); }
+  if (board.on) {
+    const m = r + 0.5;
+    if (board.full) { ax0 = m; ay0 = m; ax1 = board.w - m; ay1 = board.h - m; }
+    else { ax0 = Math.max(ax0, m); ay0 = Math.max(ay0, m); ax1 = Math.min(ax1, board.w - m); ay1 = Math.min(ay1, board.h - m); }
   }
-  if (S.lines && open.length && S.lineD > 0) {
-    const c = document.createElement("canvas"); c.width = W; c.height = H;
-    const g = c.getContext("2d", { willReadFrequently: true });
-    g.strokeStyle = "#000"; g.lineWidth = 1.5; g.lineCap = g.lineJoin = "round";
-    for (const p of open) { g.beginPath(); p.pts.forEach(([x, y], i) => { const px = (x - R.x0) * res, py = (R.y1 - y) * res; i ? g.lineTo(px, py) : g.moveTo(px, py); }); g.stroke(); }
-    const dat = g.getImageData(0, 0, W, H).data, onLine = new Uint8Array(W * H);
-    for (let i = 0; i < onLine.length; i++) onLine[i] = dat[i * 4 + 3] > 60 ? 1 : 0;
-    const dL = edt(onLine, W, H), half = Math.max(S.lineD, 0.6) * res;
-    for (let i = 0; i < surf.length; i++) if (R.inside[i] && dL[i] < half) surf[i] = Math.max(-D, surf[i] - S.lineD * (1 - dL[i] / half));
+  const pad = r + 1, x0 = ax0 - pad, y1 = ay1 + pad;
+  const res = Math.min(5, Math.max(2, Math.sqrt(1.2e6 / ((ax1 - ax0 + 2 * pad) * (ay1 - ay0 + 2 * pad)))));   // 0.2 mm grid
+  const W = Math.ceil((ax1 - ax0 + 2 * pad) * res) + 1, H = Math.ceil((ay1 - ay0 + 2 * pad) * res) + 1;
+  const acc = new Float32Array(W * H);
+  const notes = [];
+  for (const it of withShape) {
+    const o = it.opts, rs = reliefState(it), placed = placedPaths(it);
+    const closed = placed.filter(p => p.closed), open = placed.filter(p => !p.closed);
+    const inside = rasterizeFrame(closed, x0, y1, W, H, res);
+    const notIn = new Uint8Array(W * H); for (let i = 0; i < notIn.length; i++) notIn[i] = 1 - inside[i];
+    const dIn = edt(notIn, W, H);
+    let dL = null;
+    const lineD = o.rLines ? Math.max(0, +o.rLineD || 0) : 0;
+    if (lineD > 0 && open.length) dL = edt(rasterizeFrame(open, x0, y1, W, H, res, 1.5), W, H);
+    const half = Math.max(lineD, 0.6) * res;
+    const E = editGrid(it.design), tD = toDesign(it), d = it.design, LAB = labelsOf(it);
+    const base = Math.max(0, +o.rBase || 0), mode = o.rCombine || "top";
+    for (let py = 0; py < H; py++) for (let px = 0; px < W; px++) {
+      const i = py * W + px; if (!inside[i]) continue;
+      const X = x0 + (px + 0.5) / res, Y = y1 - (py + 0.5) / res, [u, v] = tD(X, Y);
+      const ex = Math.round(2 + u * E.k), ey = Math.round(2 + (d.h - v) * E.k);
+      const ei = ex >= 0 && ey >= 0 && ex < E.W && ey < E.H ? ey * E.W + ex : -1;
+      const groove = dL && dL[i] < half ? lineD * (1 - dL[i] / half) : 0;
+      const h = layerHeight(o, rs, (dIn[i] - 0.5) / res, ei >= 0 ? LAB[ei] : 0, ei >= 0 && rs.brush ? rs.brush[ei] : 0,
+                            o.rShade > 0 ? sampleShade(d, u, v) : 0, groove);
+      if (mode === "merge") acc[i] = Math.max(acc[i], base + h);
+      else if (mode === "cut") acc[i] = Math.max(0, acc[i] - (base + h));
+      else acc[i] = acc[i] + base + h;
+    }
   }
-  const val = heightmapJob(surf, W, H, res, R.x0, R.y1, [bx0 - B, by0 - B, bx1 + B, by1 + B], bitKey, S, -D);
-  reliefCache.set(key, val);
+  let D = 0; for (let i = 0; i < acc.length; i++) if (acc[i] > D) D = acc[i];
+  if (D <= 0) { const val = { note: "the 3D layers have no height.", rows: [], rough: [], D: 0 }; reliefCache2.set(key, val); return val; }
+  const surf = new Float32Array(W * H); for (let i = 0; i < surf.length; i++) surf[i] = acc[i] - D;   // top of the carving = top of the wood
+  const S0 = settingsFrom(withShape[0].opts);
+  let F = null;
+  if (rough && D > 1) { F = flatRough(surf, W, H, res, x0, y1, [ax0, ay0, ax1, ay1], D, { ...S0, opts: withShape[0].opts, bitKey }); }
+  const val = heightmapJob(surf, W, H, res, x0, y1, [ax0, ay0, ax1, ay1], bitKey, S0, -D, F && F.stock);
+  val.flat = F;
+  val.D = D; val.note = notes.join(" ");
+  if (reliefCache2.size > 12) reliefCache2.clear();
+  reliefCache2.set(key, val);
   return val;
 }
 
+// roughing with the 6 mm flat bit: z-levels, only where there's wood, stopping 0.3 mm above the surface.
+// Returns the toolpaths and the wood left behind (so the ball-nose knows what's still there).
+function flatRough(surf, W, H, res, fx0, fy1, area, D, S) {
+  const bit = BITS.flat6, r = bit.dia / 2, rp = Math.max(1, Math.round(r * res));
+  const tipF = rankFilter(surf, W, H, rp, true);              // square window: never lower than a round bit could go
+  const o = { ...S.opts, bit: "flat6" }; presetFor(o); const step = Math.max(0.3, +o.stepdown);
+  const toPx = (x, y) => [Math.round((x - fx0) * res - 0.5), Math.round((fy1 - y) * res - 0.5)];
+  const sh = r - BITS[S.bitKey].dia / 2, [bx0, by0, bx1, by1] = area, ax0 = bx0 + sh, ay0 = by0 + sh, ax1 = bx1 - sh, ay1 = by1 - sh;
+  const so = bit.dia * 0.45, nRows = Math.max(1, Math.ceil((ay1 - ay0) / so)), levels = [];
+  const zFinal = new Float32Array(W * H);
+  for (let k = 0; k <= nRows; k++) {                         // where the flat bottom ends up
+    const y = ay0 + (ay1 - ay0) * k / nRows, iy = toPx(0, y)[1], [ixa] = toPx(ax0, y), [ixb] = toPx(ax1, y);
+    for (let ix = ixa; ix <= ixb; ix++) { const i = iy * W + ix; if (i >= 0 && i < zFinal.length) zFinal[i] = Math.min(zFinal[i] || 0, Math.min(0, Math.max(-D, tipF[i] + 0.3))); }
+  }
+  const nLv = Math.ceil(D / step - 1e-9);
+  for (let lv = 1; lv <= nLv; lv++) {
+    const lvl = Math.max(-D, -lv * step), prev = lvl + step, segs = [];
+    for (let k = 0; k <= nRows; k++) {
+      const y = ay0 + (ay1 - ay0) * k / nRows, iy = toPx(0, y)[1], [ixa] = toPx(ax0, y), [ixb] = toPx(ax1, y);
+      let cur = null;
+      for (let ix = ixa; ix <= ixb; ix++) {
+        const t = tipF[iy * W + ix], z = Math.max(lvl, Math.min(0, t + 0.3)), x = fx0 + (ix + 0.5) / res;
+        if (t + 0.3 < prev - 1e-6) { if (!cur) cur = []; cur.push([x, z]); }
+        else if (cur) { cur.push([x, z]); if (cur.length > 1) segs.push({ y, pts: cur, lift: true }); cur = null; }
+      }
+      if (cur && cur.length > 1) segs.push({ y, pts: cur, lift: true });
+    }
+    if (segs.length) levels.push(segs);
+  }
+  // wood left: each point keeps material down to the lowest flat bottom that passed over it
+  const left = new Float32Array(W * H); for (let i = 0; i < left.length; i++) left[i] = zFinal[i];
+  const stock = rankFilter(left, W, H, Math.max(1, rp - 1), false);
+  return { rough: levels, rows: [], stock, S: settingsFrom(o) };
+}
+
+// make all the 3D layers fit the thickness of the wood (leaving 3 mm underneath)
+function fitReliefToWood() {
+  readBoard();
+  if (!board.on) { alert("First tick 'Show my wood' under 1 Design → My piece of wood, and type its thickness."); return; }
+  const layers = items.filter(i => i.opts.mode === "relief"); if (!layers.length) return;
+  const M = reliefCombined(layers, layers[0].opts.bit), target = board.t - 3;
+  if (!(M.D > 0)) return;
+  if (M.D <= target) return alert(`It already fits: the 3D carving is ${fmt(M.D.toFixed(1))} mm deep and your wood is ${board.t} mm.`);
+  const f = target / M.D;
+  for (const it of layers) {
+    const o = it.opts, rs = reliefState(it);
+    o.rH = +(o.rH * f).toFixed(2); o.rBase = +((+o.rBase || 0) * f).toFixed(2); o.rLineD = +((+o.rLineD || 0) * f).toFixed(2);
+    for (const k in rs.regions) rs.regions[k].add = (rs.regions[k].add || 0) * f;
+    if (rs.brush) for (let i = 0; i < rs.brush.length; i++) rs.brush[i] *= f;
+    rs.ver++;
+  }
+  selectItem(selId);
+  alert(`Scaled every 3D layer by ${Math.round(f * 100)}% so the carving is ${fmt(target)} mm deep, leaving 3 mm of wood underneath.`);
+}
+
+// ================= Heights by area: the editor =================
+let rEd = null;   // { it, E, tool, sel, h }
+function layerHeightsDesign(it) {
+  const E = editGrid(it.design), d = it.design, o = it.opts, rs = reliefState(it), s = it.w / d.w, LAB = labelsOf(it);
+  const notIn = new Uint8Array(E.W * E.H); for (let i = 0; i < notIn.length; i++) notIn[i] = 1 - E.inside[i];
+  const dIn = edt(notIn, E.W, E.H), h = new Float32Array(E.W * E.H);
+  for (let ey = 0; ey < E.H; ey++) for (let ex = 0; ex < E.W; ex++) {
+    const i = ey * E.W + ex; if (!E.inside[i]) continue;
+    const u = (ex - 2) / E.k, v = d.h - (ey - 2) / E.k;
+    h[i] = layerHeight(o, rs, (dIn[i] - 0.5) / E.k * s, LAB[i], rs.brush ? rs.brush[i] : 0, o.rShade > 0 ? sampleShade(d, u, v) : 0, 0);
+  }
+  return h;
+}
+function drawReliefEditor() {
+  const { it, E } = rEd, h = layerHeightsDesign(it), c = $("rEdCanvas"), g = c.getContext("2d"), LAB = labelsOf(it);
+  c.width = E.W; c.height = E.H;
+  const id = g.createImageData(E.W, E.H), s = it.w / it.design.w, pxmm = E.k / s;
+  let hmax = 0; for (const v of h) if (v > hmax) hmax = v;
+  for (let y = 1; y < E.H - 1; y++) for (let x = 1; x < E.W - 1; x++) {
+    const i = y * E.W + x, o = i * 4;
+    if (!E.inside[i]) { id.data[o] = id.data[o + 1] = id.data[o + 2] = 238; id.data[o + 3] = 255; continue; }
+    const gx = (h[i + 1] - h[i - 1]) * pxmm / 2, gy = (h[i - E.W] - h[i + E.W]) * pxmm / 2;
+    const sh = Math.max(0, (gx * 0.5 - gy * 0.5 + 1) / Math.sqrt(gx * gx + gy * gy + 1) / 1.22);
+    const k = 0.4 + 0.6 * sh, lift = 0.75 + 0.25 * (hmax ? h[i] / hmax : 0);
+    let r = 214 * k * lift, gg = 170 * k * lift, b = 118 * k * lift;
+    if (rEd.sel && LAB[i] === rEd.sel) { r = r * 0.6 + 40; gg = gg * 0.6 + 110; b = b * 0.6 + 235 * 0.4; }
+    id.data[o] = r; id.data[o + 1] = gg; id.data[o + 2] = b; id.data[o + 3] = 255;
+  }
+  g.putImageData(id, 0, 0);
+  $("rEdMax").textContent = `Tallest point of this layer: ${fmt(hmax.toFixed(1))} mm`;
+  const reg = rEd.sel && reliefState(it).regions[rEd.sel];
+  $("rEdArea").hidden = !rEd.sel;
+  if (rEd.sel) { $("rEdScale").value = Math.round((reg?.scale ?? 1) * 100); $("rEdAdd").value = reg?.add || 0;
+    $("rEdScaleOut").textContent = `${$("rEdScale").value}%`; $("rEdAddOut").textContent = `${fmt(+$("rEdAdd").value)} mm`; }
+}
+function openReliefEditor() {
+  const it = sel(); if (!it || it.opts.mode !== "relief") return;
+  rEd = { it, E: editGrid(it.design), tool: "pick", sel: 0 };
+  $("rEdTitle").textContent = `Shape the heights – ${it.name}`;
+  $("rEdShadeNote").hidden = !!shadeMap(it.design);
+  document.querySelectorAll("[data-rtool]").forEach(b => b.classList.toggle("sel", b.dataset.rtool === "pick"));
+  $("reliefDlg").showModal(); drawReliefEditor();
+}
+function rEdChanged() { reliefState(rEd.it).ver++; drawReliefEditor(); }
+function rEdPoint(e) {
+  const c = $("rEdCanvas"), r = c.getBoundingClientRect();
+  return [Math.floor((e.clientX - r.left) / r.width * c.width), Math.floor((e.clientY - r.top) / r.height * c.height)];
+}
+function rEdBrush(ex, ey) {
+  const { it, E } = rEd, rs = reliefState(it), s = it.w / it.design.w;
+  if (!rs.brush) rs.brush = new Float32Array(E.W * E.H);
+  const radMm = +$("rEdSize").value, rad = Math.max(1, radMm / s * E.k), str = +$("rEdStrength").value / 100 * 0.6, tool = rEd.tool;
+  const x0 = Math.max(0, Math.floor(ex - rad)), x1 = Math.min(E.W - 1, Math.ceil(ex + rad)), y0 = Math.max(0, Math.floor(ey - rad)), y1 = Math.min(E.H - 1, Math.ceil(ey + rad));
+  let avg = 0, n = 0;
+  if (tool === "smooth") { const h = layerHeightsDesign(it); for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const i = y * E.W + x; if (E.inside[i]) { avg += h[i]; n++; } } avg /= Math.max(1, n);
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const i = y * E.W + x, dd = Math.hypot(x - ex, y - ey) / rad; if (dd > 1 || !E.inside[i]) continue;
+      const f = Math.exp(-dd * dd * 3) * str; rs.brush[i] += (avg - h[i]) * f; } return; }
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    const i = y * E.W + x, dd = Math.hypot(x - ex, y - ey) / rad; if (dd > 1 || !E.inside[i]) continue;
+    const f = Math.exp(-dd * dd * 3) * str;
+    if (tool === "raise") rs.brush[i] += f; else if (tool === "lower") rs.brush[i] -= f; else if (tool === "erase") rs.brush[i] *= 1 - Math.min(1, f * 2);
+  }
+}
+
 // raster toolpaths that follow a height map with a ball-nose (or V) bit, plus roughing layers and a shaded preview
-function heightmapJob(surf, W, H, res, fx0, fy1, area, bitKey, S, floorZ) {
+function heightmapJob(surf, W, H, res, fx0, fy1, area, bitKey, S, floorZ, stock) {
   const bit = BITS[bitKey], D = -floorZ;
   const r = bit.vbit ? Math.max(bit.dia / 2, D * Math.tan((bit.angle || 60) * Math.PI / 360) + 0.1) : bit.dia / 2;   // a V-bit is as wide as its cone at full depth
-  const rp = r * res, kr = Math.ceil(rp), step = Math.max(1, Math.round(rp / 6)), ker = [];
+  const rp = r * res, kr = Math.ceil(rp), step = Math.max(1, Math.floor(rp / 14)), ker = [];   // check (nearly) every point under the bit
   const cone = bit.vbit ? 1 / Math.tan((bit.angle || 60) * Math.PI / 360) : 0;
   const prof = dd => bit.vbit ? dd * cone : r - Math.sqrt(Math.max(0, r * r - dd * dd));
   for (let dy = -kr; dy <= kr; dy += step) for (let dx = -kr; dx <= kr; dx += step) {
@@ -1292,21 +1609,35 @@ function heightmapJob(surf, W, H, res, fx0, fy1, area, bitKey, S, floorZ) {
     for (let k = 0; k <= n; k++) {
       const y = ay0 + (ay1 - ay0) * k / n, iy = toPx(0, y)[1], [ixa] = toPx(ax0, y), [ixb] = toPx(ax1, y);
       const pts = [];
-      for (let ix = ixa; ix <= ixb; ix++) pts.push([fx0 + (ix + 0.5) / res, tip(ix, iy)]);
+      for (let ix = ixa; ix <= ixb; ix++) pts.push([fx0 + (ix + 0.5) / res, tip(ix, iy), stock ? stock[Math.min(H - 1, Math.max(0, iy)) * W + Math.min(W - 1, Math.max(0, ix))] : 0]);
       rows.push({ y, pts });
     }
     return rows;
   };
   const so = bit.vbit ? Math.max(0.1, S.finish * 2) : Math.max(0.05, bit.dia * S.finish);
-  const finish = rowsFor(so);
+  const fine = rowsFor(so);
+  const finish = fine.map(rw => ({ y: rw.y, pts: rw.pts.map(q => [q[0], q[1]]) }));
   const rough = [];
   const levels = Math.ceil(D / S.step - 1e-9) - 1;
   if (levels > 0) {
-    const coarse = rowsFor(Math.max(so, bit.vbit ? 1.0 : bit.dia * 0.45));
+    const every = Math.max(1, Math.round(Math.max(so, bit.vbit ? 1.0 : bit.dia * 0.45) / so));
+    const coarse = fine.filter((rw, k) => k % every === 0 || k === fine.length - 1);   // [x, tip, stock], reused
     for (let k = 1; k <= levels; k++) {
-      const lvl = -k * S.step;
-      rough.push(coarse.map(rw => ({ y: rw.y, pts: rw.pts.map(([x, z]) => [x, Math.max(lvl, Math.min(0, z + 0.3))]) })));
+      // only where there is still wood to take off at this depth; lift clear between those stretches
+      const lvl = -k * S.step, prev = lvl + S.step, segs = [];
+      coarse.forEach((rw, ri) => {
+        const pts = rw.pts.map(([x, z]) => [x, Math.max(lvl, Math.min(0, z + 0.3))]);
+        let cur = null;
+        for (let i = 0; i < pts.length; i++) {
+          const need = rw.pts[i][1] + 0.3 < Math.min(prev, rw.pts[i][2] ?? 0) - 1e-6;
+          if (need) { if (!cur) cur = i > 0 ? [pts[i - 1]] : []; cur.push(pts[i]); }
+          else if (cur) { cur.push(pts[i]); if (cur.length > 1) segs.push({ y: rw.y, pts: cur, lift: true }); cur = null; }
+        }
+        if (cur && cur.length > 1) segs.push({ y: rw.y, pts: cur, lift: true });
+      });
+      if (segs.length) rough.push(segs);
     }
+    rough.forEach(lv => lv.forEach(sg => { sg.pts = sg.pts.map(q => [q[0], q[1]]); }));
   }
   const img = shadeHeightmap(surf, W, H, res, (x, y) => {
     const [qx0, qy0] = toPx(ax0 - r, ay1 + r), [qx1, qy1] = toPx(ax1 + r, ay0 - r);
@@ -1360,11 +1691,16 @@ function emitRaster(g, M, S, Z, ox, oy) {
   let len = 0, lastZ = 0;
   const pass = rows => {
     if (!rows.length) return;
+    let rowNo = -1, lastY = null;
     rows.forEach((rw, k) => {
       let pts = rdp(rw.pts, 0.01);
-      if (k % 2) pts = pts.slice().reverse();
+      if (rw.y !== lastY) { rowNo++; lastY = rw.y; }
+      if (rw.lift ? rowNo % 2 : k % 2) pts = pts.slice().reverse();
       const y = fmt(rw.y + oy);
-      if (k === 0) g.push(`G0 X${fmt(pts[0][0] + ox)} Y${y}`, `G0 Z${Z(0.5)}`, `G1 Z${Z(pts[0][1])} F${fmt(S.plunge)}`);
+      if (rw.lift) {                                   // a separate stretch: lift clear, move, go down
+        g.push(`G0 Z${Z(1)}`, `G0 X${fmt(pts[0][0] + ox)} Y${y}`, `G1 Z${Z(pts[0][1])} F${fmt(S.plunge)}`);
+        len += 0.3;
+      } else if (k === 0) g.push(`G0 X${fmt(pts[0][0] + ox)} Y${y}`, `G0 Z${Z(0.5)}`, `G1 Z${Z(pts[0][1])} F${fmt(S.plunge)}`);
       else {
         g.push(`G1 Z${Z(Math.max(lastZ, pts[0][1]))} F${fmt(S.plunge)}`, `G1 Y${y}`, `G1 Z${Z(pts[0][1])}`);
         len += Math.abs(rows[k].y - rows[k - 1].y);
@@ -1374,6 +1710,7 @@ function emitRaster(g, M, S, Z, ox, oy) {
         len += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
       }
       lastZ = pts.at(-1)[1];
+      if (rw.lift) lastZ = 1;
     });
     g.push(`G0 Z${Z(S.safe)}`);
   };
@@ -1387,23 +1724,36 @@ function emitOp(op) {
   const G = globalSettings();
   const its = op.items.slice().sort((a, b) => MODE_ORDER[a.opts.mode] - MODE_ORDER[b.opts.mode]);
   let maxDepth = 0;
-  for (const it of its) maxDepth = Math.max(maxDepth, settingsFrom(it.opts).total);
+  const layers = its.filter(it => it.opts.mode === "relief");
+  const roughing = $("rRough").checked;
+  if (op.roughOf) {                                               // the 6 mm flat bit roughing step
+    const M = reliefCombined(op.roughOf, op.roughOf[0].opts.bit, true), F = M.flat;
+    const lift = G.air ? (M.D || 0) + 3 : 0, Z = v => fmt(v + lift);
+    const g = [`(${APP} - roughing with the 6 mm flat bit${G.air ? " - TEST RUN IN THE AIR" : ""})`, "G21 G90 G17 G94", `G0 Z${Z(G.safe)}`, `M3 S${fmt(G.spindle)}`, "G4 P3"];
+    let minutes = 0.05;
+    if (F) minutes += emitRaster(g, F, F.S, Z, 0, 0);
+    g.push("M5", `G0 Z${Z(G.safe)}`, "G0 X0 Y0", "(done)");
+    return { text: g.join("\n") + "\n", minutes, notes: [], preview: [], rasters: [], maxDepth: M.D || 0, reliefD: 0 };
+  }
+  const RM = layers.length ? reliefCombined(layers, op.bit, roughing) : null;
+  for (const it of its) if (it.opts.mode !== "relief") maxDepth = Math.max(maxDepth, settingsFrom(it.opts).total);
+  if (RM) maxDepth = Math.max(maxDepth, RM.D || 0);
   const lift = G.air ? maxDepth + 3 : 0, Z = v => fmt(v + lift);
   const g = [`(${APP} - ${BITS[op.bit].name}${G.air ? " - TEST RUN IN THE AIR" : ""})`, "G21 G90 G17 G94", `G0 Z${Z(G.safe)}`, `M3 S${fmt(G.spindle)}`, "G4 P3"];
   let minutes = 0.05;
   const notes = [], preview = [], rasters = [];
+  if (RM) {
+    if (RM.note) notes.push(`3D carving: ${RM.note}`);
+    if (RM.rows.length) {
+      g.push(`(3D carving: ${layers.map(i => i.name).join(", ")})`);
+      minutes += emitRaster(g, RM, settingsFrom(layers[0].opts), Z, 0, 0);
+      rasters.push({ M: RM, ox: 0, oy: 0 });
+      preview.push({ closed: true, pts: RM.rect, item: layers[0].id });
+    }
+  }
   for (const it of its) {
     const S = settingsFrom(it.opts);
-    if (S.mode === "relief") {
-      const M = reliefModel(localPaths(it).paths, S, it.opts.bit, localKey(it));
-      if (M.note) notes.push(`${it.name}: ${M.note}`);
-      if (!M.rows.length) continue;
-      g.push(`(${it.name})`);
-      minutes += emitRaster(g, M, S, Z, it.x, it.y);
-      rasters.push({ M, ox: it.x, oy: it.y });
-      preview.push({ closed: true, pts: M.rect.map(([x, y]) => [x + it.x, y + it.y]), item: it.id });
-      continue;
-    }
+    if (S.mode === "relief") continue;
     const tp = toolpathsFor(it, S);
     if (tp.note) notes.push(`${it.name}: ${tp.note}`);
     let paths;
@@ -1418,19 +1768,27 @@ function emitOp(op) {
     for (const p of paths) preview.push({ ...p, item: it.id });
   }
   g.push("M5", `G0 Z${Z(G.safe)}`, "G0 X0 Y0", "(done)");
-  return { text: g.join("\n") + "\n", minutes, notes, preview, rasters, maxDepth };
+  return { text: g.join("\n") + "\n", minutes, notes, preview, rasters, maxDepth, reliefD: RM ? RM.D || 0 : 0 };
 }
 
 function buildJob() {
   const groups = new Map();
   for (const it of items) { const k = it.opts.bit + (it.opts.mode === "inlayM" ? "|plug" : ""); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(it); }
   let ops = [...groups.entries()].map(([k, its]) => ({ bit: k.split("|")[0], plug: k.endsWith("|plug"), items: its, last: Math.max(...its.map(i => MODE_ORDER[i.opts.mode] ?? 5)) }));
+  const rl = items.filter(i => i.opts.mode === "relief");
+  if (rl.length && $("rRough").checked) {
+    const M = reliefCombined(rl, rl[0].opts.bit, true);
+    if (M.flat && M.flat.rough.length) {
+      const ro = { bit: "flat6", items: rl, roughOf: rl, last: 2.5, rough: true };
+      ops.push(ro);
+    }
+  }
   ops.sort((a, b) => a.last - b.last);                    // anything that cuts pieces free goes last
   ops = ops.map(op => ({ ...op, ...emitOp(op) }));
   return {
     ops, minutes: ops.reduce((a, o) => a + o.minutes, 0),
     notes: ops.flatMap(o => o.notes), preview: ops.flatMap(o => o.preview), rasters: ops.flatMap(o => o.rasters),
-    maxDepth: Math.max(0, ...ops.map(o => o.maxDepth)), S: settings(),
+    maxDepth: Math.max(0, ...ops.map(o => o.maxDepth)), reliefD: Math.max(0, ...ops.map(o => o.reliefD || 0)), S: settings(),
   };
 }
 // kept for the tests and older callers: the whole job as one program when only one bit is used
@@ -1568,7 +1926,7 @@ cv.addEventListener("pointerup", endDrag); cv.addEventListener("pointercancel", 
 
 // ================= Refresh =================
 let refreshTimer = null, opIndex = 0;
-function refresh() { clearTimeout(refreshTimer); refreshTimer = setTimeout(refreshNow, 120); }
+function refresh() { clearTimeout(refreshTimer); refreshTimer = setTimeout(refreshNow, items.some(i => i.opts.mode === "relief") ? 450 : 120); }   // 3D takes a moment: wait for typing to finish
 function refreshNow() {
   lastJob = items.length ? buildJob() : null;
   const msgs = [];
@@ -1587,7 +1945,11 @@ function refreshNow() {
       if (it.opts.mode === "vcarve" && !b.vbit) msgs.push(`${it.name}: V-carve needs a V-bit.`);
       if (it.opts.mode === "cut" && !it.opts.skin) msgs.push(`${it.name}: without the skin, screw or clamp the piece so it can't be thrown when it comes loose.`);
     }
-    if (items.some(i => i.opts.mode === "relief")) msgs.push(`Use wood at least ${fmt(lastJob.maxDepth + 3)} mm thick for the 3D carving.`);
+    if (lastJob.reliefD > 0) {
+      const D = lastJob.reliefD;
+      if (board.on && D > board.t - 3) msgs.push(`The 3D carving is ${fmt(D.toFixed(1))} mm deep but your wood is ${board.t} mm – press "📏 Fit to my wood" (in 2 How to cut) to scale it.`);
+      else if (!board.on) msgs.push(`The 3D carving is ${fmt(D.toFixed(1))} mm deep: use wood at least ${fmt(Math.ceil(D + 3))} mm thick.`);
+    }
     msgs.push(...lastJob.notes);
     const mat = MATERIALS[$("material").value]; if (mat.note) msgs.push(mat.note);
     if (typeof boardWarnings === "function") msgs.push(...boardWarnings());
@@ -1605,7 +1967,7 @@ function renderOps() {
     const l = document.createElement("label"); l.className = "check";
     const r = document.createElement("input"); r.type = "radio"; r.name = "op"; r.checked = i === opIndex; r.onchange = () => { opIndex = i; };
     const s = document.createElement("span");
-    s.innerHTML = `<b>Step ${i + 1}: ${BITS[op.bit].name}${op.plug ? " – on the SECOND piece of wood" : ""}</b><br><small></small>`;
+    s.innerHTML = `<b>Step ${i + 1}: ${BITS[op.bit].name}${op.plug ? " – on the SECOND piece of wood" : op.rough ? " – roughing out the 3D carving" : ""}</b><br><small></small>`;
     s.querySelector("small").textContent = `${op.items.map(it => it.name).join(", ")} · about ${Math.ceil(op.minutes)} min`;
     l.append(r, s); $("opsList").append(l);
   });
@@ -1621,6 +1983,42 @@ function download(name, text) {
   a.download = name; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
+
+// ----- 3D layers: order, editor, fit to wood -----
+$("upBtn").onclick = () => { const i = items.findIndex(x => x.id === selId); if (i > 0) { [items[i - 1], items[i]] = [items[i], items[i - 1]]; selectItem(selId); } };
+$("downBtn").onclick = () => { const i = items.findIndex(x => x.id === selId); if (i >= 0 && i < items.length - 1) { [items[i + 1], items[i]] = [items[i], items[i + 1]]; selectItem(selId); } };
+$("rEditBtn").onclick = () => openReliefEditor();
+$("rFitBtn").onclick = () => fitReliefToWood();
+document.querySelectorAll("[data-rtool]").forEach(b => b.onclick = () => { rEd.tool = b.dataset.rtool; document.querySelectorAll("[data-rtool]").forEach(x => x.classList.toggle("sel", x === b)); });
+let rEdDown = false;
+let lassoPts = null;
+$("rEdCanvas").onpointerdown = e => {
+  const [x, y] = rEdPoint(e), E = rEd.E;
+  if (rEd.tool === "pick") { const l = labelsOf(rEd.it)[y * E.W + x] || 0; rEd.sel = l; drawReliefEditor(); return; }
+  if (rEd.tool === "lasso") { lassoPts = [[x, y]]; $("rEdCanvas").setPointerCapture(e.pointerId); return; }
+  rEdDown = true; $("rEdCanvas").setPointerCapture(e.pointerId); rEdBrush(x, y); rEdChanged();
+};
+$("rEdCanvas").onpointermove = e => {
+  if (lassoPts) { const [x, y] = rEdPoint(e); lassoPts.push([x, y]); const g = $("rEdCanvas").getContext("2d"); g.strokeStyle = "#1f6feb"; g.lineWidth = 2;
+    g.beginPath(); const a = lassoPts[lassoPts.length - 2]; g.moveTo(a[0], a[1]); g.lineTo(x, y); g.stroke(); return; }
+  if (!rEdDown) return; const [x, y] = rEdPoint(e); rEdBrush(x, y); rEdChanged(); };
+$("rEdCanvas").onpointerup = () => {
+  rEdDown = false;
+  if (lassoPts) {
+    const pts = lassoPts; lassoPts = null;
+    if (pts.length < 5) return drawReliefEditor();
+    const { it, E } = rEd, rs = reliefState(it), d = it.design;
+    rs.lassos = rs.lassos || []; const id = 1000 + rs.lassos.length + 1;
+    rs.lassos.push({ id, pts: pts.map(([x, y]) => [+((x - 2) / E.k).toFixed(3), +(d.h - (y - 2) / E.k).toFixed(3)]) });
+    rEd.sel = id; rEdChanged();
+    document.querySelector("[data-rtool=pick]").click();
+  }
+};
+$("rEdScale").oninput = () => { const rs = reliefState(rEd.it); (rs.regions[rEd.sel] = rs.regions[rEd.sel] || {}).scale = +$("rEdScale").value / 100; rEdChanged(); };
+$("rEdAdd").oninput = () => { const rs = reliefState(rEd.it); (rs.regions[rEd.sel] = rs.regions[rEd.sel] || {}).add = +$("rEdAdd").value; rEdChanged(); };
+$("rEdAreaReset").onclick = () => { delete reliefState(rEd.it).regions[rEd.sel]; rEdChanged(); };
+$("rEdReset").onclick = () => { if (!confirm("Remove all height edits on this layer?")) return; const rs = reliefState(rEd.it); rs.regions = {}; rs.brush = null; rs.lassos = []; rEd.sel = 0; rEdChanged(); };
+$("rEdDone").onclick = () => { $("reliefDlg").close(); refresh(); };
 
 // ----- lining pieces up -----
 function alignTarget(it) {
@@ -1772,7 +2170,7 @@ $("inlayBtn").onclick = () => makeInlay();
 const board = { on: false, w: 300, h: 200, t: 18 };
 function readBoard() {
   board.on = $("boardOn").checked; board.w = Math.max(10, +$("boardW").value || 300);
-  board.h = Math.max(10, +$("boardH").value || 200); board.t = Math.max(1, +$("boardT").value || 18);
+  board.h = Math.max(10, +$("boardH").value || 200); board.t = Math.max(1, +$("boardT").value || 18); board.full = $("boardFull").checked;
 }
 function drawBoard(ctx, X, Y, sc) {
   if (!board.on) return;
@@ -1788,7 +2186,7 @@ function boardWarnings() {
   for (const it of items) {
     const S = settingsFrom(it.opts);
     if (it.opts.mode === "cut" && Math.abs(+it.opts.thick - board.t) > 0.01) m.push(`${it.name}: cut-out thickness is ${it.opts.thick} mm but your wood is ${board.t} mm (change it under "How to cut it").`);
-    if (it.opts.mode !== "cut" && it.opts.mode !== "inlayM" && S.total > board.t - 2) m.push(`${it.name}: that's nearly through your ${board.t} mm wood.`);
+    if (it.opts.mode !== "cut" && it.opts.mode !== "inlayM" && it.opts.mode !== "relief" && S.total > board.t - 2) m.push(`${it.name}: that's nearly through your ${board.t} mm wood.`);
   }
   return m;
 }
@@ -1817,12 +2215,10 @@ function simulateJob() {
   for (const op of ops) {
     const bit = BITS[op.bit], half = (bit.angle || 60) * Math.PI / 360;
     const r = bit.vbit ? Math.max(0.2, op.maxDepth * Math.tan(half) + 0.2) : bit.dia / 2;
-    const rp = Math.max(1, Math.ceil(r * res)), ker = [];
-    for (let dy = -rp; dy <= rp; dy++) for (let dx = -rp; dx <= rp; dx++) {
-      const d = Math.hypot(dx, dy) / res; if (d > r + 0.5 / res) continue;
-      const off = bit.vbit ? d / Math.tan(half) : bit.ball ? r - Math.sqrt(Math.max(0, r * r - d * d)) : 0;
-      ker.push(dy * W + dx, dx, dy, off);
-    }
+    const rp = Math.max(1, Math.ceil(r * res)) + 1, ker = [];
+    const prof = d => d > r ? 1e9 : bit.vbit ? d / Math.tan(half) : bit.ball ? r - Math.sqrt(Math.max(0, r * r - d * d)) : 0;
+    for (let dy = -rp; dy <= rp; dy++) for (let dx = -rp; dx <= rp; dx++) if (Math.hypot(dx, dy) <= rp + 0.5) ker.push(dy * W + dx, dx, dy, 0);
+    ker.prof = prof;
     let x = 0, y = 0, z = 5;
     for (const ln of op.text.split("\n")) {
       if (!/^G[01]\b/.test(ln)) continue;
@@ -1839,13 +2235,13 @@ function simulateJob() {
       const [ax, ay, az, bx, by, bz, ker] = moves[done], [px0, py0] = toPx(ax, ay), [px1, py1] = toPx(bx, by);
       const n = Math.max(1, Math.ceil(Math.hypot(px1 - px0, py1 - py0) / 0.7));
       for (let s = 0; s <= n; s++) {
-        const t = s / n, cx = Math.round(px0 + (px1 - px0) * t), cy = Math.round(py0 + (py1 - py0) * t), cz = az + (bz - az) * t;
+        const t = s / n, fx = px0 + (px1 - px0) * t - 0.5, fy = py0 + (py1 - py0) * t - 0.5, cz = az + (bz - az) * t;   // exact bit position
         if (cz >= 0) continue;
-        const base = cy * W + cx;
+        const cx = Math.round(fx), cy = Math.round(fy), ox = fx - cx, oy = fy - cy, base = cy * W + cx;
         for (let k = 0; k < ker.length; k += 4) {
           const xx = cx + ker[k + 1], yy = cy + ker[k + 2];
           if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue;
-          const v = cz + ker[k + 3], i = base + ker[k];
+          const v = cz + ker.prof(Math.hypot(ker[k + 1] - ox, ker[k + 2] - oy) / res), i = base + ker[k];
           if (v < hm[i]) hm[i] = v;
         }
       }
@@ -1961,6 +2357,7 @@ function playSim(fromStart) {
 function finishSim() { clearInterval(simTimer); simState.stampTo(simState.moves.length); renderSim(simState, $("simCanvas")); $("simProg").value = simState.done; $("simText").textContent = "Finished"; }
 
 ["boardOn", "boardW", "boardH", "boardT"].forEach(id => $(id).addEventListener("input", () => { readBoard(); refresh(); }));
+$("boardFull").addEventListener("change", () => { readBoard(); refresh(); });
 $("boardOn").addEventListener("change", () => { readBoard(); refresh(); });
 $("centreBtn").onclick = () => { $("boardOn").checked = true; centreOnBoard(); };
 $("previewBtn").onclick = () => openPreview();
@@ -2098,7 +2495,8 @@ function announce(ok, what) {
 function serializeJob() {
   return { app: APP, v: 1, material: $("material").value, board: { ...board },
     items: items.map(it => ({ name: it.name, w: it.w, rot: it.rot, mirror: it.mirror, x: it.x, y: it.y, opts: { ...it.opts },
-      design: { name: it.design.name, w: it.design.w, h: it.design.h, naturalMm: it.design.naturalMm, isText: !!it.design.isText,
+      relief: it.relief ? { regions: it.relief.regions, lassos: it.relief.lassos || [], brush: it.relief.brush ? (() => { const b = []; it.relief.brush.forEach((v, i) => { if (Math.abs(v) > 0.005) b.push(i, +v.toFixed(3)); }); return { n: it.relief.brush.length, b }; })() : null } : null,
+      design: { name: it.design.name, w: it.design.w, h: it.design.h, naturalMm: it.design.naturalMm, isText: !!it.design.isText, ox: it.design.ox, oyTop: it.design.oyTop,
                 paths: it.design.paths.map(p => ({ closed: p.closed, pts: p.pts })) } })) };
 }
 function loadJob(o) {
@@ -2107,7 +2505,9 @@ function loadJob(o) {
   for (const s of o.items) {
     const k = JSON.stringify([s.design.name, s.design.w, s.design.h, s.design.paths.length]);
     if (!byKey.has(k)) byKey.set(k, { ...s.design, id: ++designSeq });
-    items.push({ ...s, id: ++itemSeq, design: byKey.get(k), opts: { ...s.opts } });
+    const rl = s.relief ? { regions: s.relief.regions || {}, lassos: s.relief.lassos || [], ver: 1, brush: null } : undefined;
+    if (rl && s.relief.brush) { rl.brush = new Float32Array(s.relief.brush.n); for (let j = 0; j < s.relief.brush.b.length; j += 2) rl.brush[s.relief.brush.b[j]] = s.relief.brush.b[j + 1]; }
+    items.push({ ...s, id: ++itemSeq, design: byKey.get(k), opts: { ...s.opts }, relief: rl });
   }
   if (o.material && MATERIALS[o.material]) $("material").value = o.material;
   if (o.board) { $("boardOn").checked = !!o.board.on; $("boardW").value = o.board.w; $("boardH").value = o.board.h; $("boardT").value = o.board.t; readBoard(); }
@@ -2687,7 +3087,7 @@ $("startBtn").onclick = async () => {
     const msg = nx.plug
       ? `Step ${opIndex} done. Next is the inlay PLUG: take the board off, clamp the second piece of wood, fit the ${BITS[nx.bit].name} bit, set the start corner and surface on the new wood, then press Start for step ${opIndex + 1}.`
       : `Step ${opIndex} done. Next: switch the spindle off, change to the ${BITS[nx.bit].name} bit, ` +
-        `then set the SURFACE again (touch plate or by eye). Don't change the start corner. Then press Start for step ${opIndex + 1}.`;
+        `then set the SURFACE again (touch plate or by eye) on a part of the wood that hasn't been cut, such as the edge. Don't change the start corner. Then press Start for step ${opIndex + 1}.`;
     $("progText").textContent = msg; alert(msg);
   }
 };
@@ -2827,7 +3227,7 @@ $("wizResume").onclick = () => wizSquareCut();
 
 // ----- remember settings between visits -----
 const KEEP = ["material", "bit", "depth", "thick", "skin", "exact", "feed", "plunge", "stepdown", "spindle", "safe", "rH", "rRound",
-              "rBorder", "rLines", "rLineD", "rFinish", "plateT", "boardOn", "boardW", "boardH", "boardT", "dingOn", "width", "offX", "offY", "detail", "imgKind", "fontSel", "boldIn"];
+              "rBorder", "rLines", "rLineD", "rFinish", "plateT", "boardOn", "boardW", "boardH", "boardT", "boardFull", "dingOn", "rRough", "width", "offX", "offY", "detail", "imgKind", "fontSel", "boldIn"];
 function saveSettings() {
   try {
     const o = { mode: mode() };
@@ -2929,7 +3329,7 @@ document.querySelectorAll(".nextBtn").forEach(b => b.onclick = () => showTab(b.d
 let startTab = "design"; try { startTab = localStorage.getItem("easyCarve.tab") || "design"; } catch {}
 showTab($("tab-" + startTab) ? startTab : "design");
 
-window.EasyCarve = { items: () => items, alignPiece, showTab, straightenPage, serializeJob, loadJob, diaryLoad, announce, sim: () => simState, simulateJob, openPreview, finishSim, centreOnBoard, board, makeInlay, inlayMaleModel, startProject, jigsawDesign, PROJECTS, buildJob, selectItem, addItem, shapeDesign, loadSvgText, makeGcode, makeTextDesign, setDesign, buildReport, explain, onLine, resumePlan, jobLines };
+window.EasyCarve = { items: () => items, reliefCombined, editGrid, reliefState, fitReliefToWood, openReliefEditor, layerHeightsDesign, alignPiece, showTab, straightenPage, serializeJob, loadJob, diaryLoad, announce, sim: () => simState, simulateJob, openPreview, finishSim, centreOnBoard, board, makeInlay, inlayMaleModel, startProject, jigsawDesign, PROJECTS, buildJob, selectItem, addItem, shapeDesign, loadSvgText, makeGcode, makeTextDesign, setDesign, buildReport, explain, onLine, resumePlan, jobLines };
 </script>
 </body>
 </html>
