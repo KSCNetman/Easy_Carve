@@ -56,7 +56,7 @@
   #connBadge.on { background: #dafbe1; color: var(--go); }
   main { display: grid; grid-template-columns: 410px 1fr; gap: 10px; padding: 8px 10px; min-height: calc(100vh - 185px); }
   @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
-  .panel { display: flex; flex-direction: column; gap: 12px; position: sticky; top: 8px; max-height: calc(100vh - 175px); }
+  .panel { display: flex; flex-direction: column; gap: 12px; position: sticky; top: 8px; max-height: calc(100vh - 205px); }
   .panel > .step { display: none; overflow-y: auto; flex: 1; min-height: 0; }
   .panel > .step.active { display: block; }
   #menu { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 6px; }
@@ -109,7 +109,7 @@
   .stepsel button.sel { background: var(--accent); color: #fff; border-color: var(--accent); }
   progress { width: 100%; height: 18px; margin-top: 8px; }
   .view { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; min-height: 420px;
-          position: sticky; top: 8px; height: calc(100vh - 175px); }
+          position: sticky; top: 8px; height: calc(100vh - 205px); }
   @media (max-width: 900px) { .view { position: static; height: 70vh; } }
   #cvWrap { flex: 1; position: relative; min-height: 380px; }
   canvas#cv { position: absolute; inset: 0; width: 100%; height: 100%; }
