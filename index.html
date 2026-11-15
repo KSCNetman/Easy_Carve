@@ -14,6 +14,30 @@
   }
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
+  header.ws { padding: 4px 12px; gap: 10px; }
+  header.ws .brand { font-weight: 800; font-size: 17px; margin-right: 6px; }
+  #menubar { display: flex; gap: 2px; }
+  .mbItem { position: relative; }
+  .mbBtn { padding: 5px 10px; border: none; background: none; font-size: 15px; border-radius: 6px; }
+  .mbBtn:hover { background: #eee; }
+  .mbList { position: absolute; top: 100%; left: 0; z-index: 50; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.15); padding: 4px; min-width: 240px; display: flex; flex-direction: column; }
+  .mbList button { text-align: left; border: none; background: none; padding: 7px 12px; font-size: 14px; border-radius: 6px; }
+  .mbList button:hover { background: #eef4ff; }
+  .mbList hr { border: none; border-top: 1px solid var(--line); margin: 4px 0; width: 100%; }
+  #toolbar { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 10px; background: var(--panel); border-bottom: 1px solid var(--line); align-items: stretch; }
+  #toolbar .tg { display: flex; gap: 2px; padding-right: 6px; border-right: 1px solid var(--line); align-items: center; }
+  #toolbar .tg:last-child { border-right: none; }
+  #toolbar button { display: flex; flex-direction: column; align-items: center; padding: 3px 7px; min-width: 46px; font-size: 18px; line-height: 1.1; border: 1px solid transparent; background: none; border-radius: 7px; }
+  #toolbar button small { font-size: 11px; color: var(--muted); }
+  #toolbar button:hover:not(:disabled) { background: #f2f2f2; }
+  #toolbar button.sel { background: #eef4ff; border-color: var(--accent); }
+  #toolbar .opts { gap: 10px; font-size: 13px; }
+  #toolbar .opts label { display: flex; align-items: center; gap: 4px; margin: 0; }
+  #toolbar .opts select, #toolbar .opts input { font-size: 13px; padding: 3px 4px; }
+  #toolHelp { padding: 3px 14px; font-size: 13px; color: var(--muted); background: #fbfaf7; border-bottom: 1px solid var(--line); }
+  #statusbar { position: fixed; left: 0; right: 0; bottom: 0; height: 26px; display: flex; gap: 24px; align-items: center; padding: 0 14px; font-size: 13px; background: #1d1d1f; color: #ddd; z-index: 40; }
+  main { padding-bottom: 36px !important; }
+  #main3d { position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; touch-action: none; background: #f2f0ec; }
   /* every setting row: words on the left, one fixed-width column of boxes on the right, units lined up */
   .panel label:not(.check):not(.modes label), dialog label:not(.check) {
     display: grid; grid-template-columns: minmax(0, 1fr) 215px; align-items: center; column-gap: 10px; }
@@ -30,12 +54,12 @@
   header h1 { margin: 0; font-size: 22px; }
   #connBadge { margin-left: auto; padding: 4px 12px; border-radius: 999px; background: #eee; font-size: 15px; }
   #connBadge.on { background: #dafbe1; color: var(--go); }
-  main { display: grid; grid-template-columns: 430px 1fr; gap: 16px; padding: 16px; min-height: calc(100vh - 60px); }
+  main { display: grid; grid-template-columns: 410px 1fr; gap: 10px; padding: 8px 10px; min-height: calc(100vh - 185px); }
   @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
-  .panel { display: flex; flex-direction: column; gap: 12px; position: sticky; top: 16px; max-height: calc(100vh - 92px); }
+  .panel { display: flex; flex-direction: column; gap: 12px; position: sticky; top: 8px; max-height: calc(100vh - 175px); }
   .panel > .step { display: none; overflow-y: auto; flex: 1; min-height: 0; }
   .panel > .step.active { display: block; }
-  #menu { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 6px; }
+  #menu { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 6px; }
   #menu button { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px; font-size: 22px; border: none; background: none; border-radius: 9px; }
   #menu button span { font-size: 13px; font-weight: 600; color: var(--muted); }
   #menu button.sel { background: #eef4ff; box-shadow: inset 0 0 0 2px var(--accent); }
@@ -85,7 +109,7 @@
   .stepsel button.sel { background: var(--accent); color: #fff; border-color: var(--accent); }
   progress { width: 100%; height: 18px; margin-top: 8px; }
   .view { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; min-height: 420px;
-          position: sticky; top: 16px; height: calc(100vh - 92px); }
+          position: sticky; top: 8px; height: calc(100vh - 175px); }
   @media (max-width: 900px) { .view { position: static; height: 70vh; } }
   #cvWrap { flex: 1; position: relative; min-height: 380px; }
   canvas#cv { position: absolute; inset: 0; width: 100%; height: 100%; }
@@ -120,25 +144,39 @@
 </style>
 </head>
 <body>
-<header>
-  <h1>Easy Carve</h1>
-  <span class="hint">for Genmitsu PROVerXL 4030 · v1.3</span>
-  <a href="quick-guide.pdf" target="_blank" class="hint" style="margin-left:auto">Quick guide (PDF)</a>
-  <button id="installBtn" hidden style="padding:6px 12px">Install on this computer</button>
-  <span id="connBadge" style="margin-left:0">Machine not connected</span>
+<header class="ws">
+  <div class="brand">Easy Carve</div>
+  <nav id="menubar"></nav>
+  <span class="hint" style="margin-left:auto">v2.0 · Genmitsu PROVerXL 4030</span>
+  <button id="installBtn" hidden style="padding:4px 10px">Install</button>
+  <span id="connBadge">Machine not connected</span>
 </header>
+<div id="toolbar">
+  <div class="tg"><button id="tbUndo" title="Undo (Ctrl+Z)">↶<small>Undo</small></button><button id="tbRedo" title="Redo (Ctrl+Y)">↷<small>Redo</small></button></div>
+  <div class="tg"><button data-tool="select" title="Select and move">🖱️<small>Select</small></button><button data-tool="nodes" title="Edit the points of a drawn shape">◇<small>Points</small></button></div>
+  <div class="tg"><button data-tool="line" title="Lines">╱<small>Line</small></button><button data-tool="curve" title="Smooth curve through points">∿<small>Curve</small></button><button data-tool="arc" title="Arc">◠<small>Arc</small></button></div>
+  <div class="tg"><button data-tool="rect" title="Rectangle">▭<small>Rect</small></button><button data-tool="circle" title="Circle">◯<small>Circle</small></button><button data-tool="ellipse" title="Ellipse">⬭<small>Ellipse</small></button><button data-tool="star" title="Polygon or star">☆<small>Star</small></button></div>
+  <div class="tg opts"><label>Snap <select id="snapSel"><option value="0">off</option><option value="1">1 mm</option><option value="5" selected>5 mm</option><option value="10">10 mm</option></select></label>
+    <label>Corners <input id="cornerR" type="number" value="0" min="0" step="1" style="width:52px"> mm</label>
+    <label><select id="starType"><option value="star">Star</option><option value="poly">Polygon</option></select> <input id="starN" type="number" value="5" min="3" max="40" style="width:46px"></label></div>
+  <div class="tg"><button id="tbWeld" data-needs2 title="Join the selected shapes into one">⊕<small>Weld</small></button><button id="tbSub" data-needs2 title="Cut later-picked shapes out of the first">⊖<small>Subtract</small></button><button id="tbInt" data-needs2 title="Keep only where they overlap">⊗<small>Overlap</small></button>
+    <button id="tbOffset" data-needs1 title="Outline in or out">⧈<small>Offset</small></button><button id="tbMirror" data-needs1 title="Mirror">⇋<small>Mirror</small></button><button id="tbToc" data-needs1 title="Text along a curve">𝒜<small>Text on curve</small></button></div>
+  <div class="tg" style="margin-left:auto"><button data-view="2d" class="sel">2D<small>view</small></button><button data-view="3d">3D<small>view</small></button></div>
+</div>
+<div id="toolHelp"></div>
 
 <main>
 <section class="panel">
   <nav id="menu">
-    <button data-tab="design" class="sel">🎨<span>1 Design</span></button>
-    <button data-tab="cut">✂️<span>2 How to cut</span></button>
-    <button data-tab="machine">🛠️<span>3 Cut it</span></button>
+    <button data-tab="design" class="sel">✏️<span>Drawing</span></button>
+    <button data-tab="model">🏔️<span>Modelling</span></button>
+    <button data-tab="cut">🛠️<span>Toolpaths</span></button>
+    <button data-tab="machine">🔌<span>Machine</span></button>
     <button data-tab="diary">📒<span>Diary</span></button>
   </nav>
 
   <div class="step" id="tab-design">
-    <h2><span class="num">1</span> Pick your design</h2>
+    <h2>✏️ Drawing</h2>
     <select id="projectSel" style="width:100%;max-width:none;margin-bottom:10px;font-weight:600">
       <option value="">✨ Start from a ready-made project…</option>
       <option value="houseSign">House sign</option><option value="plaque">Name plaque</option>
@@ -212,11 +250,21 @@
       <div class="hint">Set the start corner on the front-left corner of the wood.</div>
       <div class="row"><button id="centreBtn">Centre the job on my wood</button></div>
     </details>
-    <button class="big nextBtn" data-next="cut" style="margin-top:12px">Next: 2 How to cut →</button>
+    <button class="big nextBtn" data-next="cut" style="margin-top:12px">Next: Toolpaths →</button>
+  </div>
+
+  <div class="step" id="tab-model">
+    <h2>🏔️ Modelling (3D)</h2>
+    <p class="hint">3D pieces are layers that build up into one carving, in the order of the pieces list.</p>
+    <button id="make3dBtn" class="big">Make the selected piece a 3D layer</button>
+    <div class="hint" style="margin-top:8px"><b>3D layers</b> (bottom first):</div>
+    <div id="layerList" class="chips"></div>
+    <div id="modelHost"></div>
+    <p id="modelNone" class="hint">Pick a 3D layer to change its shape.</p>
   </div>
 
   <div class="step" id="tab-cut">
-    <h2><span class="num">2</span> How to cut it <span id="cutFor" class="hint" style="font-weight:400"></span></h2>
+    <h2>🛠️ Toolpaths <span id="cutFor" class="hint" style="font-weight:400"></span></h2>
     <div class="modes">
       <label><input type="radio" name="mode" value="engrave" checked><b>Engrave</b><span>Carve along the lines</span></label>
       <label><input type="radio" name="mode" value="vcarve"><b>V-carve</b><span>Crisp chiselled letters &amp; shapes</span></label>
@@ -248,6 +296,7 @@
         <option value="0.2">Quick (ridged)</option>
       </select></label>
     </div>
+    <div id="reliefMoved" class="hint" hidden>The 3D shape settings for this piece are in the <a href="#" onclick="showTab('model');return false">🏔️ Modelling</a> panel.</div>
     <div id="inlayRows" hidden>
       <label>Plug start depth <span><input id="inS" type="number" step="0.1"> mm</span></label>
       <label>Plug floor depth <span><input id="inP" type="number" step="0.1"> mm</span></label>
@@ -272,11 +321,11 @@
     <button id="previewBtn" class="big" style="background:#6e40c9;margin:6px 0" disabled>👀 Preview the finished piece</button>
     <div id="boundsWarn" class="warn" hidden></div>
     <button id="saveBtn" disabled>Save G-code file (to use in other software)</button>
-    <button class="big nextBtn" data-next="machine" style="margin-top:10px">Next: 3 Cut it →</button>
+    <button class="big nextBtn" data-next="machine" style="margin-top:10px">Next: Machine →</button>
   </div>
 
   <div class="step" id="tab-machine">
-    <h2><span class="num">3</span> Cut it</h2>
+    <h2>🔌 Machine</h2>
     <div id="noSerial" class="warn" hidden>This browser can't talk to the machine. Open this file in <b>Google Chrome</b> or <b>Microsoft Edge</b> on a computer.</div>
     <button id="connectBtn" class="big">Connect to machine</button>
     <div id="status" class="status">Not connected<small>Plug in the USB cable, switch the machine on, then press Connect.</small></div>
@@ -334,7 +383,7 @@
 
 <section class="view">
   <label class="check" style="margin:0 0 6px"><input type="checkbox" id="zoom"><span>Zoom in on the design</span></label>
-  <div id="cvWrap"><canvas id="cv"></canvas></div>
+  <div id="cvWrap"><canvas id="cv"></canvas><canvas id="main3d" hidden></canvas></div>
   <div class="legend">
     <span><i style="background:#1f6feb"></i>Bit path</span>
     <span><i style="background:#888"></i>Your design</span>
@@ -344,6 +393,7 @@
   </div>
 </section>
 </main>
+<footer id="statusbar"><span id="stCoords">X – Y –</span><span id="stSel">Nothing selected</span><span id="stJob"></span></footer>
 
 <div id="hiddenSvg"></div>
 <div id="busy">Working…</div>
@@ -392,7 +442,7 @@
 
 <script>
 "use strict";
-const APP = "Easy Carve v1.3";
+const APP = "Easy Carve v2.0";
 const $ = id => document.getElementById(id);
 
 // ================= Presets =================
@@ -449,6 +499,7 @@ function showModeRows() {
   $("depthRow").hidden = cut || rel; $("thickRow").hidden = !cut; $("skinRow").hidden = !cut; $("exactRow").hidden = !cut;
   $("reliefRows").hidden = !rel;
   $("depthLabel").textContent = mode() === "vcarve" ? "Deepest it goes" : "How deep";
+  if ($("reliefMoved")) { $("reliefMoved").hidden = !rel; $("modelNone").hidden = rel; }
   const plug = mode() === "inlayM";
   $("inlayRows").hidden = !plug; $("plugModeLabel").hidden = !plug; $("inlayBtn").hidden = plug;
   let hasShade = false; try { const cur = sel(); hasShade = !!(cur && shadeMap(cur.design)); } catch {}
@@ -1085,6 +1136,8 @@ function renderItemList() {
   $("dupBtn").disabled = $("copiesBtn").disabled = $("delBtn").disabled = !sel();
   const at = items.findIndex(x => x.id === selId); $("upBtn").disabled = at <= 0; $("downBtn").disabled = at < 0 || at >= items.length - 1;
   if (typeof updateAlignHint === "function") updateAlignHint();
+  if (typeof updateWsButtons === "function") updateWsButtons();
+  if (typeof renderLayers === "function") renderLayers();
   $("openBtn").textContent = sel() ? "Swap the selected piece for another file…" : "Open design…";
   $("useTextBtn").textContent = sel() && sel().design.isText ? "Change this text" : "Use this text";
 }
@@ -1872,7 +1925,8 @@ function draw() {
     ctx.beginPath(); ctx.arc(X(mx), Y(my), 8, 0, 7); ctx.moveTo(X(mx) - 14, Y(my)); ctx.lineTo(X(mx) + 14, Y(my));
     ctx.moveTo(X(mx), Y(my) - 14); ctx.lineTo(X(mx), Y(my) + 14); ctx.stroke();
   }
-  if (!items.length) { ctx.fillStyle = "#888"; ctx.font = "18px system-ui"; ctx.fillText("Open a design or type some text to see it here", W / 2 - 190, H / 2); }
+  if (typeof drawOverlay === "function") drawOverlay();
+  if (!items.length) { ctx.fillStyle = "#888"; ctx.font = "18px system-ui"; ctx.fillText("Draw with the toolbar, or open a design, or type some text", W / 2 - 210, H / 2); }
   else { ctx.fillStyle = "#888"; ctx.font = "13px system-ui"; ctx.fillText("Drag pieces to move them · red square = resize · red dot = turn", 12, 18); }
 }
 new ResizeObserver(draw).observe($("cvWrap"));
@@ -1955,6 +2009,7 @@ function refreshNow() {
     if (typeof boardWarnings === "function") msgs.push(...boardWarnings());
   } else $("estimate").textContent = "";
   $("boundsWarn").hidden = !msgs.length; $("boundsWarn").textContent = msgs.join(" ");
+  if ($("stJob")) $("stJob").textContent = $("estimate").textContent;
   renderOps(); updateButtons(); draw();
 }
 
@@ -3294,6 +3349,469 @@ let installPrompt = null;
 window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installPrompt = e; $("installBtn").hidden = false; });
 $("installBtn").onclick = async () => { if (!installPrompt) return; installPrompt.prompt(); await installPrompt.userChoice; installPrompt = null; $("installBtn").hidden = true; };
 
+// ================= Workspace: menus, toolbar, drawing & editing tools =================
+let tool = "select", multi = new Set();            // multi = extra pieces selected with Shift
+const selection = () => { const s = new Set(multi); if (selId) s.add(selId); return items.filter(i => s.has(i.id)); };
+
+// ---------- undo / redo ----------
+const undoStack = [], redoStack = [];
+function snapshotItems() {
+  return { selId, items: items.map(it => ({ ...it, opts: { ...it.opts }, vec: it.vec ? JSON.parse(JSON.stringify(it.vec)) : undefined,
+    relief: it.relief ? { regions: JSON.parse(JSON.stringify(it.relief.regions)), lassos: JSON.parse(JSON.stringify(it.relief.lassos || [])), brush: it.relief.brush ? it.relief.brush.slice() : null, ver: (it.relief.ver || 0) + 1 } : undefined })) };
+}
+let lastPush = 0, restoring = false;
+function pushUndo(force) {
+  if (restoring) return;
+  const now = Date.now(); if (!force && now - lastPush < 800) return;   // typing a number = one step
+  lastPush = now; undoStack.push(snapshotItems()); if (undoStack.length > 60) undoStack.shift(); redoStack.length = 0; updateWsButtons();
+}
+function restore(snap) { restoring = true; items = snap.items; multi.clear(); selectItem(items.find(i => i.id === snap.selId) ? snap.selId : (items[0] && items[0].id) || null); restoring = false; updateWsButtons(); }
+function undo() { if (!undoStack.length) return; redoStack.push(snapshotItems()); restore(undoStack.pop()); }
+function redo() { if (!redoStack.length) return; undoStack.push(snapshotItems()); restore(redoStack.pop()); }
+// remember the job before anything that changes it
+for (const name of ["setDesign", "removeItem", "alignPiece", "startProject", "loadJob", "fitReliefToWood", "centreOnBoard", "makeInlay", "addJigsaw"]) {
+  const f = window[name]; if (typeof f !== "function") continue;
+  window[name] = function (...a) { pushUndo(true); return f.apply(this, a); };
+}
+{ const f = syncFromDom; window.syncFromDom = function (...a) { pushUndo(); return f.apply(this, a); }; }
+
+// ---------- editable drawn shapes ("vectors") ----------
+// it.vec = { type, ...params } in mm, Y up, relative to the shape's own corner; turned into an outline when needed
+function vecOutline(v) {
+  const P = [];
+  if (v.type === "rect") {
+    const { w, h, r = 0 } = v;
+    if (r <= 0) return [[[0, 0], [w, 0], [w, h], [0, h], [0, 0]]];
+    const arc = (cx, cy, a0) => { for (let i = 0; i <= 10; i++) { const a = a0 + Math.PI / 2 * i / 10; P.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]); } };
+    arc(w - r, r, -Math.PI / 2); arc(w - r, h - r, 0); arc(r, h - r, Math.PI / 2); arc(r, r, Math.PI); P.push(P[0].slice()); return [P];
+  }
+  if (v.type === "ellipse") { for (let i = 0; i <= 120; i++) { const a = i / 120 * 2 * Math.PI; P.push([v.rx + v.rx * Math.cos(a), v.ry + v.ry * Math.sin(a)]); } return [P]; }
+  if (v.type === "star") {
+    const n = v.n, inner = v.inner;
+    for (let i = 0; i <= 2 * n; i++) { const a = Math.PI / 2 + i * Math.PI / n, rr = v.star && i % 2 ? v.r * inner : v.r; if (!v.star && i % 2) continue; P.push([v.r + rr * Math.cos(a), v.r + rr * Math.sin(a)]); }
+    P.push(P[0].slice()); return [P];
+  }
+  if (v.type === "arc") return [arcPts(v.p0, v.p1, v.p2)];
+  // "poly": nodes with corner or smooth points (smooth = curve through them)
+  const N = v.nodes, closed = v.closed, n = N.length;
+  if (n < 2) return [];
+  const get = i => closed ? N[(i + n) % n] : N[Math.max(0, Math.min(n - 1, i))];
+  const segs = closed ? n : n - 1;
+  for (let i = 0; i < segs; i++) {
+    const p1 = get(i), p2 = get(i + 1), p0 = get(i - 1), p3 = get(i + 2);
+    const t1 = p1[2] ? [(p2[0] - p0[0]) / 2, (p2[1] - p0[1]) / 2] : [0, 0], t2 = p2[2] ? [(p3[0] - p1[0]) / 2, (p3[1] - p1[1]) / 2] : [0, 0];
+    const steps = p1[2] || p2[2] ? 20 : 1;
+    for (let k = i ? 1 : 0; k <= steps; k++) {
+      const t = k / steps, h00 = 2 * t ** 3 - 3 * t * t + 1, h10 = t ** 3 - 2 * t * t + t, h01 = -2 * t ** 3 + 3 * t * t, h11 = t ** 3 - t * t;
+      P.push([h00 * p1[0] + h10 * t1[0] + h01 * p2[0] + h11 * t2[0], h00 * p1[1] + h10 * t1[1] + h01 * p2[1] + h11 * t2[1]]);
+    }
+  }
+  if (closed) P.push(P[0].slice());
+  return [P];
+}
+function arcPts(a, b, c) {
+  const d = 2 * (a[0] * (b[1] - c[1]) + b[0] * (c[1] - a[1]) + c[0] * (a[1] - b[1]));
+  if (Math.abs(d) < 1e-9) return [a, c];
+  const ux = ((a[0] ** 2 + a[1] ** 2) * (b[1] - c[1]) + (b[0] ** 2 + b[1] ** 2) * (c[1] - a[1]) + (c[0] ** 2 + c[1] ** 2) * (a[1] - b[1])) / d;
+  const uy = ((a[0] ** 2 + a[1] ** 2) * (c[0] - b[0]) + (b[0] ** 2 + b[1] ** 2) * (a[0] - c[0]) + (c[0] ** 2 + c[1] ** 2) * (b[0] - a[0])) / d;
+  const r = Math.hypot(a[0] - ux, a[1] - uy), ang = p => Math.atan2(p[1] - uy, p[0] - ux);
+  let a0 = ang(a), a1 = ang(b), a2 = ang(c);
+  const norm = x => ((x % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+  let sweep = norm(a2 - a0); if (norm(a1 - a0) > sweep) sweep -= 2 * Math.PI;   // go the way that passes through b
+  const P = []; const n = Math.max(8, Math.ceil(Math.abs(sweep) * r / 0.5));
+  for (let i = 0; i <= n; i++) { const t = a0 + sweep * i / n; P.push([ux + r * Math.cos(t), uy + r * Math.sin(t)]); }
+  return P;
+}
+// outline (mm, Y up) -> a design; returns it with how far its corner moved
+function designFromMm(paths, name) {
+  let mx = Infinity, my = Infinity; for (const p of paths) for (const [x, y] of p) { mx = Math.min(mx, x); my = Math.min(my, y); }
+  const d = normalize(paths.map(p => p.map(([x, y]) => [x, -y])), 1);
+  d.name = name; return { d, mx, my };
+}
+function vecDesign(v, name) { const { d, mx, my } = designFromMm(vecOutline(v), name); d.isVec = true; return { d, mx, my }; }
+// world position of a point given in the piece's drawing units
+function fromDesign(it) {
+  const d = it.design, s = it.w / d.w, a = it.rot * Math.PI / 180, c = Math.cos(a), sn = Math.sin(a), L = localPaths(it), cx = d.w * s / 2, cy = d.h * s / 2;
+  return (u, v) => { let X = u * s - cx; const Y = v * s - cy; if (it.mirror) X = -X; return [X * c - Y * sn - L.mx + it.x, X * sn + Y * c - L.my + it.y]; };
+}
+// change a drawn piece's shape without it jumping around
+function rebuildVec(it) {
+  const anchor = it.vec.type === "poly" && it.vec.nodes.length ? it.vec.nodes[0] : null;
+  const before = anchor ? fromDesign(it)(anchor[0] - (it.vec.ox || 0), anchor[1] - (it.vec.oy || 0)) : [it.x, it.y];
+  const s = it.w / it.design.w, { d, mx, my } = vecDesign(it.vec, it.name);
+  it.vec.ox = mx; it.vec.oy = my;
+  it.design = d; it.w = Math.max(0.5, d.w * s);
+  if (anchor) { const after = fromDesign(it)(anchor[0] - mx, anchor[1] - my); it.x += before[0] - after[0]; it.y += before[1] - after[1]; }
+}
+function addVecItem(v, name, worldX, worldY) {
+  pushUndo(true);
+  const { d, mx, my } = vecDesign(v, name);
+  v.ox = mx; v.oy = my;
+  const it = { id: ++itemSeq, name, design: d, w: d.w, rot: 0, mirror: false, opts: { ...readOpts(), mode: "engrave" }, x: worldX + mx, y: worldY + my, vec: v };
+  if (BITS[it.opts.bit].ball) it.opts.bit = "vbit";
+  presetFor(it.opts); items.push(it); multi.clear(); selectItem(it.id);
+  return it;
+}
+
+// ---------- drawing on the picture ----------
+let drawing = null;                 // the shape being drawn
+const snapMm = () => +$("snapSel").value || 0;
+const snapPt = ([x, y]) => { const g = snapMm(); return g ? [Math.round(x / g) * g, Math.round(y / g) * g] : [x, y]; };
+function mmAt(e) { const r = cv.getBoundingClientRect(); return view.toMm(e.clientX - r.left, e.clientY - r.top); }
+const TOOL_HELP = {
+  select: "Click a piece to pick it; Shift-click to pick several. Drag to move; red square resizes, red dot turns.",
+  line: "Click to add points. Double-click (or Enter) to finish; click the first point to close the shape.",
+  curve: "Click to add points – the line curves smoothly through them. Double-click (or Enter) to finish; click the first point to close it.",
+  arc: "Click the start, then the end, then a point the arc passes through.",
+  circle: "Drag from the centre outwards.", ellipse: "Drag from one corner to the opposite corner.", rect: "Drag from one corner to the opposite corner. Hold Shift for a square.",
+  star: "Drag from the centre outwards.", nodes: "Drag the points of a drawn shape. Double-click a line to add a point; click a point then press Delete to remove it, or S to switch smooth/corner.",
+};
+function setTool(t) {
+  tool = t; drawing = null; nodeSel = null;
+  document.querySelectorAll("[data-tool]").forEach(b => b.classList.toggle("sel", b.dataset.tool === t));
+  $("toolHelp").textContent = TOOL_HELP[t] || "";
+  cv.style.cursor = t === "select" ? "grab" : "crosshair";
+  draw();
+}
+function finishDrawing(close) {
+  if (!drawing) return;
+  const D = drawing; drawing = null;
+  if ((D.kind === "line" || D.kind === "curve") && D.pts.length >= 2) {
+    const pts = D.pts.slice(); if (close && pts.length > 2 && Math.hypot(pts[0][0] - pts.at(-1)[0], pts[0][1] - pts.at(-1)[1]) < 1e-6) pts.pop();
+    const ox = Math.min(...pts.map(p => p[0])), oy = Math.min(...pts.map(p => p[1]));
+    addVecItem({ type: "poly", closed: !!close && pts.length > 2, nodes: pts.map(([x, y]) => [x - ox, y - oy, D.kind === "curve" ? 1 : 0]) }, D.kind === "curve" ? "Curve" : close ? "Shape" : "Line", ox, oy);
+  }
+  setTool(tool);
+}
+function drawShapeFromDrag(D) {
+  const [x0, y0] = D.a, [x1, y1] = D.b, w = Math.abs(x1 - x0), h = Math.abs(y1 - y0);
+  if (D.kind === "rect") { const side = D.square ? Math.max(w, h) : 0; const W = side || w, H = side || h; if (W < 0.5 || H < 0.5) return;
+    addVecItem({ type: "rect", w: W, h: H, r: +$("cornerR").value || 0 }, "Rectangle", Math.min(x0, x1), Math.min(y0, y1)); }
+  if (D.kind === "ellipse") { if (w < 0.5 || h < 0.5) return; addVecItem({ type: "ellipse", rx: w / 2, ry: h / 2 }, "Ellipse", Math.min(x0, x1), Math.min(y0, y1)); }
+  if (D.kind === "circle") { const r = Math.hypot(x1 - x0, y1 - y0); if (r < 0.3) return; addVecItem({ type: "ellipse", rx: r, ry: r }, "Circle", x0 - r, y0 - r); }
+  if (D.kind === "star") { const r = Math.hypot(x1 - x0, y1 - y0); if (r < 0.5) return; const n = Math.max(3, +$("starN").value | 0), isStar = $("starType").value === "star";
+    addVecItem({ type: "star", r, n, inner: 0.45, star: isStar }, isStar ? `${n}-point star` : `${n}-sided shape`, x0 - r, y0 - r); }
+}
+
+// ---------- editing the points of a drawn shape ----------
+let nodeSel = null, nodeDrag = null;
+function nodesWorld(it) { const f = fromDesign(it), v = it.vec; return v.nodes.map(n => f(n[0] - v.ox, n[1] - v.oy)); }
+function toEditable(it) {
+  // turn a rectangle/circle/star/arc into points that can be edited
+  if (!it.vec || it.vec.type === "poly") return;
+  const pts = vecOutline(it.vec)[0], v = it.vec;
+  let nodes;
+  if (v.type === "rect" && !(v.r > 0)) nodes = [[0, 0, 0], [v.w, 0, 0], [v.w, v.h, 0], [0, v.h, 0]];
+  else if (v.type === "ellipse") nodes = Array.from({ length: 8 }, (_, i) => { const a = i / 8 * 2 * Math.PI; return [v.rx + v.rx * Math.cos(a), v.ry + v.ry * Math.sin(a), 1]; });
+  else { const step = Math.max(1, Math.floor(pts.length / 24)); nodes = pts.filter((_, i) => i % step === 0).map(([x, y]) => [x, y, v.type === "star" ? 0 : 1]); if (v.type === "star") nodes = pts.slice(0, -1).map(([x, y]) => [x, y, 0]); }
+  it.vec = { type: "poly", closed: v.type !== "arc", nodes, ox: v.ox, oy: v.oy };
+  rebuildVec(it);
+}
+
+cv.addEventListener("pointerdown", e => {
+  if (!view) return;
+  const p = mmAt(e);
+  if (tool === "select") {
+    if (!e.shiftKey) { if (multi.size) { multi.clear(); draw(); } return; }      // normal click: the usual select/drag
+    const hit = items.slice().reverse().find(it => { const b = itemBox(it); return p[0] >= b.x && p[0] <= b.x + b.w && p[1] >= b.y && p[1] <= b.y + b.h; });
+    if (hit) { if (hit.id === selId) { const other = [...multi][0]; multi.delete(other); if (other) selectItem(other); } else if (multi.has(hit.id)) multi.delete(hit.id); else { if (selId) multi.add(selId); selectItem(hit.id); multi.delete(hit.id); } }
+    updateWsButtons(); draw(); e.stopImmediatePropagation(); e.preventDefault(); return;
+  }
+  e.stopImmediatePropagation(); e.preventDefault();
+  if (tool === "nodes") {
+    const it = sel(); if (!it || !it.vec) return;
+    toEditable(it);
+    const W = nodesWorld(it), tol = 8 / view.sc;
+    const k = W.findIndex(([x, y]) => Math.hypot(x - p[0], y - p[1]) < tol);
+    if (k >= 0) { pushUndo(true); nodeSel = k; nodeDrag = { k }; cv.setPointerCapture(e.pointerId); }
+    else nodeSel = null;
+    draw(); return;
+  }
+  const q = snapPt(p);
+  if (tool === "line" || tool === "curve") {
+    if (!drawing) drawing = { kind: tool, pts: [q], hover: q };
+    else {
+      const first = drawing.pts[0];
+      if (drawing.pts.length > 2 && Math.hypot(q[0] - first[0], q[1] - first[1]) < 8 / view.sc) { finishDrawing(true); return; }
+      drawing.pts.push(q);
+    }
+    draw(); return;
+  }
+  if (tool === "arc") {
+    if (!drawing) drawing = { kind: "arc", pts: [q], hover: q };
+    else { drawing.pts.push(q); if (drawing.pts.length === 3) { const [a, b, c] = drawing.pts;           // start, end, through
+      const ox = Math.min(a[0], b[0], c[0]), oy = Math.min(a[1], b[1], c[1]); const rel = pt => [pt[0] - ox, pt[1] - oy];
+      drawing = null; addVecItem({ type: "arc", p0: rel(a), p1: rel(c), p2: rel(b) }, "Arc", ox, oy); setTool(tool); return; } }
+    draw(); return;
+  }
+  drawing = { kind: tool, a: q, b: q, square: e.shiftKey }; cv.setPointerCapture(e.pointerId); draw();
+}, { capture: true });
+cv.addEventListener("pointermove", e => {
+  if (!view) return;
+  const p = mmAt(e); $("stCoords").textContent = `X ${p[0].toFixed(1)}  Y ${p[1].toFixed(1)} mm`;
+  if (tool === "select") return;
+  e.stopImmediatePropagation();
+  if (tool === "nodes" && nodeDrag) {
+    const it = sel(), q = snapPt(p), toD = toDesign(it), [u, v] = toD(q[0], q[1]);
+    const n = it.vec.nodes[nodeDrag.k]; n[0] = u + it.vec.ox; n[1] = v + it.vec.oy;
+    rebuildVec(it); localCache.clear(); writePos(it); draw(); return;
+  }
+  if (drawing) { const q = snapPt(p); if (drawing.a) { drawing.b = q; drawing.square = e.shiftKey; } else drawing.hover = q; draw(); }
+}, { capture: true });
+cv.addEventListener("pointerup", e => {
+  if (tool === "select") return;
+  e.stopImmediatePropagation();
+  if (nodeDrag) { nodeDrag = null; refresh(); return; }
+  if (drawing && drawing.a) { const D = drawing; drawing = null; drawShapeFromDrag(D); setTool(tool); }
+}, { capture: true });
+cv.addEventListener("dblclick", e => {
+  if (tool === "line" || tool === "curve") { if (drawing) { drawing.pts.pop(); finishDrawing(false); } return; }
+  if (tool === "nodes") {                                     // add a point on the nearest line
+    const it = sel(); if (!it || !it.vec || it.vec.type !== "poly") return;
+    const p = mmAt(e), W = nodesWorld(it), n = W.length; let best = -1, bd = Infinity;
+    for (let i = 0; i < (it.vec.closed ? n : n - 1); i++) { const a = W[i], b = W[(i + 1) % n], dx = b[0] - a[0], dy = b[1] - a[1], L = dx * dx + dy * dy || 1;
+      const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / L)), d = Math.hypot(a[0] + dx * t - p[0], a[1] + dy * t - p[1]); if (d < bd) { bd = d; best = i; } }
+    if (best < 0 || bd > 12 / view.sc) return;
+    pushUndo(true); const [u, v] = toDesign(it)(p[0], p[1]); it.vec.nodes.splice(best + 1, 0, [u + it.vec.ox, v + it.vec.oy, it.vec.nodes[best][2]]);
+    nodeSel = best + 1; rebuildVec(it); localCache.clear(); refresh();
+  }
+});
+document.addEventListener("keydown", e => {
+  if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") { e.preventDefault(); redo(); return; }
+  if (e.key === "Escape") { drawing = null; nodeSel = null; setTool("select"); return; }
+  if (e.key === "Enter" && drawing) { finishDrawing(false); return; }
+  if (tool === "nodes" && nodeSel != null) {
+    const it = sel(); if (!it || !it.vec || it.vec.type !== "poly") return;
+    if ((e.key === "Delete" || e.key === "Backspace") && it.vec.nodes.length > (it.vec.closed ? 3 : 2)) { pushUndo(true); it.vec.nodes.splice(nodeSel, 1); nodeSel = null; rebuildVec(it); localCache.clear(); refresh(); }
+    if (e.key.toLowerCase() === "s") { pushUndo(true); const n = it.vec.nodes[nodeSel]; n[2] = n[2] ? 0 : 1; rebuildVec(it); localCache.clear(); refresh(); }
+    return;
+  }
+  if ((e.key === "Delete" || e.key === "Backspace") && tool === "select" && selection().length) { deleteSelection(); }
+});
+function deleteSelection() {
+  const s = selection(); if (!s.length) return;
+  if (!confirm(s.length > 1 ? `Remove these ${s.length} pieces?` : `Remove “${s[0].name}”?`)) return;
+  pushUndo(true); const ids = new Set(s.map(i => i.id)); items = items.filter(i => !ids.has(i.id)); multi.clear();
+  selectItem(items.length ? items[items.length - 1].id : null);
+}
+
+// draw what's being drawn, the extra selection and editable points on top of the picture
+function drawOverlay() {
+  if (!view) return;
+  const { X, Y } = view;
+  ctx.save();
+  for (const it of items) if (multi.has(it.id)) { const b = itemBox(it); ctx.setLineDash([5, 4]); ctx.strokeStyle = "#cf222e"; ctx.lineWidth = 1.2; ctx.strokeRect(X(b.x), Y(b.y + b.h), (b.w) * view.sc, b.h * view.sc); ctx.setLineDash([]); }
+  ctx.strokeStyle = "#e3008c"; ctx.lineWidth = 1.5; ctx.fillStyle = "#e3008c";
+  if (drawing) {
+    if (drawing.pts) {
+      const pts = drawing.pts.concat(drawing.hover ? [drawing.hover] : []);
+      if (drawing.kind === "arc" && pts.length === 3) { const P = arcPts(pts[0], pts[2], pts[1]); ctx.beginPath(); P.forEach(([x, y], i) => i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y))); ctx.stroke(); }
+      else if (drawing.kind === "curve" && pts.length > 1) { const P = vecOutline({ type: "poly", closed: false, nodes: pts.map(([x, y]) => [x, y, 1]) })[0]; ctx.beginPath(); P.forEach(([x, y], i) => i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y))); ctx.stroke(); }
+      else { ctx.beginPath(); pts.forEach(([x, y], i) => i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y))); ctx.stroke(); }
+      for (const [x, y] of drawing.pts) ctx.fillRect(X(x) - 3, Y(y) - 3, 6, 6);
+    } else {
+      const [x0, y0] = drawing.a, [x1, y1] = drawing.b;
+      ctx.beginPath();
+      if (drawing.kind === "rect") { let w = x1 - x0, h = y1 - y0; if (drawing.square) { const s2 = Math.max(Math.abs(w), Math.abs(h)); w = Math.sign(w || 1) * s2; h = Math.sign(h || 1) * s2; } ctx.rect(X(x0), Y(y0), w * view.sc, -h * view.sc); }
+      else if (drawing.kind === "ellipse") ctx.ellipse(X((x0 + x1) / 2), Y((y0 + y1) / 2), Math.abs(x1 - x0) / 2 * view.sc, Math.abs(y1 - y0) / 2 * view.sc, 0, 0, 7);
+      else { const r = Math.hypot(x1 - x0, y1 - y0); ctx.arc(X(x0), Y(y0), r * view.sc, 0, 7); ctx.moveTo(X(x0), Y(y0)); ctx.lineTo(X(x1), Y(y1)); }
+      ctx.stroke();
+      ctx.font = "12px system-ui"; ctx.fillText(drawing.kind === "circle" || drawing.kind === "star" ? `r ${Math.hypot(x1 - x0, y1 - y0).toFixed(1)} mm` : `${Math.abs(x1 - x0).toFixed(1)} × ${Math.abs(y1 - y0).toFixed(1)} mm`, X(x1) + 8, Y(y1) - 8);
+    }
+  }
+  const it = sel();
+  if (tool === "nodes" && it && it.vec && it.vec.type === "poly") {
+    nodesWorld(it).forEach(([x, y], k) => { const smooth = it.vec.nodes[k][2];
+      ctx.fillStyle = k === nodeSel ? "#e3008c" : "#fff"; ctx.strokeStyle = "#e3008c"; ctx.beginPath();
+      smooth ? ctx.arc(X(x), Y(y), 5, 0, 7) : ctx.rect(X(x) - 4.5, Y(y) - 4.5, 9, 9); ctx.fill(); ctx.stroke(); });
+  }
+  ctx.restore();
+}
+
+// ---------- combining, offsetting, mirroring ----------
+function worldClosed(it) { return placedPaths(it).filter(p => p.closed).map(p => p.pts); }
+function combineShapes(kind) {
+  const s = selection(); if (s.length < 2) return alert("Pick two or more pieces first: click one, then Shift-click the others.");
+  const shapes = s.map(worldClosed); if (shapes.some(x => !x.length)) return alert("Weld, subtract and overlap need closed shapes (outlines), not open lines.");
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const sh of shapes) for (const p of sh) for (const [x, y] of p) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
+  x0 -= 2; y0 -= 2; x1 += 2; y1 += 2;
+  const res = Math.min(15, Math.max(4, Math.sqrt(5e6 / ((x1 - x0) * (y1 - y0))))), W = Math.ceil((x1 - x0) * res), H = Math.ceil((y1 - y0) * res);
+  const masks = shapes.map(sh => rasterizeFrame(sh.map(pts => ({ pts })), x0, y1, W, H, res));
+  const out = new Float32Array(W * H);
+  for (let i = 0; i < out.length; i++) {
+    let v;
+    if (kind === "weld") v = masks.some(m => m[i]); else if (kind === "intersect") v = masks.every(m => m[i]);
+    else v = masks[0][i] && !masks.slice(1).some(m => m[i]);
+    out[i] = v ? 1 : 0;
+  }
+  const f = boxBlur(out, W, H, 1);
+  for (let x = 0; x < W; x++) { f[x] = 0; f[(H - 1) * W + x] = 0; } for (let y = 0; y < H; y++) { f[y * W] = 0; f[y * W + W - 1] = 0; }
+  const loops = traceIso(f, W, H, 0.5).map(l => rdp(l.map(([px, py]) => [x0 + (px + 0.5) / res, y1 - (py + 0.5) / res]), 0.02));
+  if (!loops.length) return alert(kind === "intersect" ? "Those pieces don't overlap." : "Nothing is left.");
+  pushUndo(true);
+  const names = { weld: "Welded shape", subtract: "Cut-away shape", intersect: "Overlap" };
+  const { d, mx, my } = designFromMm(loops, names[kind]);
+  const it = { id: ++itemSeq, name: names[kind], design: d, w: d.w, rot: 0, mirror: false, opts: { ...s[0].opts }, x: mx, y: my };
+  const ids = new Set(s.map(i => i.id)), at = items.findIndex(i => ids.has(i.id));
+  items = items.filter(i => !ids.has(i.id)); items.splice(Math.max(0, at), 0, it); multi.clear(); selectItem(it.id);
+}
+function offsetShape() {
+  const it = sel(); if (!it) return;
+  if (!worldClosed(it).length) return alert("Offset needs a closed shape (an outline).");
+  wiz("Offset (outline around the shape)", `<label>Distance <span><input id="offD" type="number" value="5" min="0.2" step="0.5"> mm</span></label>
+    <label>Direction <select id="offDir"><option value="out">outwards (bigger)</option><option value="in">inwards (smaller)</option></select></label>
+    <label class="check"><input type="checkbox" id="offKeep" checked><span>Keep the original as well</span></label>
+    <p class="hint">Handy for borders round a picture, frames, and cut-out lines with a margin.</p>`,
+    [["Cancel", wizClose], ["Make it", () => {
+      const dist = Math.max(0.1, +$("offD").value || 5), out = $("offDir").value === "out", keep = $("offKeep").checked; wizClose();
+      const sh = worldClosed(it).map(pts => ({ pts, closed: true }));
+      const R = rasterize(sh, dist + 3, Math.min(15, Math.max(4, Math.sqrt(5e6 / ((itemBox(it).w + 2 * dist + 6) * (itemBox(it).h + 2 * dist + 6)))))), W = R.W, H = R.H;
+      const dd = out ? edt(R.inside, W, H) : edt(Uint8Array.from(R.inside, v => 1 - v), W, H), v = new Float32Array(W * H), lim = dist * R.res + 0.5;
+      for (let i = 0; i < v.length; i++) v[i] = out ? lim - dd[i] : dd[i] - lim;
+      const loops = traceIso(v, W, H, 0).map(l => rdp(l.map(R.toMm), 0.02));
+      if (!loops.length) return alert("The shape is too small for that inward offset.");
+      pushUndo(true);
+      const { d, mx, my } = designFromMm(loops, `${it.name} – offset ${fmt(dist)} mm ${out ? "out" : "in"}`);
+      const n = { id: ++itemSeq, name: d.name, design: d, w: d.w, rot: 0, mirror: false, opts: { ...it.opts }, x: mx, y: my };
+      if (!keep) items = items.filter(i => i.id !== it.id);
+      items.push(n); multi.clear(); selectItem(n.id);
+    }, "main"]]);
+}
+function mirrorSel(dir) {
+  const s = selection(); if (!s.length) return; pushUndo(true);
+  for (const it of s) { const b = itemBox(it); it.mirror = !it.mirror; if (dir === "v") it.rot = (it.rot + 180) % 360; localCache.clear(); const nb = itemBox(it); it.x += b.x - nb.x; it.y += b.y - nb.y; }
+  selectItem(selId);
+}
+function selectAll() { if (!items.length) return; multi = new Set(items.map(i => i.id)); multi.delete(items[0].id); selectItem(items[0].id); updateWsButtons(); draw(); }
+
+// ---------- text along a curve ----------
+function textOnCurve() {
+  const curve = sel(); if (!curve) return alert("First draw (or pick) the curve or circle the text should follow.");
+  wiz("Text along a curve", `<p>Follows <b></b>.</p><textarea id="tocText" rows="1">Hares Run Wild</textarea>
+    <label>Letter height <span><input id="tocH" type="number" value="12" min="2" step="1"> mm</span></label>
+    <label>Gap between letters <span><input id="tocGap" type="number" value="1" min="-3" step="0.5"> mm</span></label>
+    <label>Move it along <span><input id="tocStart" type="number" value="0" min="-50" max="50" step="5"> %</span></label>
+    <label>Where <select id="tocSide"><option value="left">over the top / outside</option><option value="right">along the bottom / inside</option></select></label>`,
+    [["Cancel", wizClose], ["Make it", async () => {
+      const text = $("tocText").value.trim(); if (!text) return;
+      const H = Math.max(1, +$("tocH").value || 12), gap = +$("tocGap").value || 0, startPct = +$("tocStart").value || 0, flip = $("tocSide").value === "right";
+      wizClose(); busy(true); await nextFrame();
+      try {
+        const best = placedPaths(curve).sort((a, b) => b.pts.length - a.pts.length)[0];
+        let path = best.pts.slice(); const closed = best.closed;
+        if (closed) {                                   // over the top: clockwise; along the bottom: anticlockwise
+          let area = 0; for (let i = 0, j = path.length - 1; i < path.length; j = i++) area += (path[j][0] - path[i][0]) * (path[j][1] + path[i][1]);
+          const ccw = area > 0; if ((!flip && ccw) || (flip && !ccw)) path.reverse();
+        } else if (path.at(-1)[0] < path[0][0]) path.reverse();   // open lines read left to right
+        const cum = [0]; for (let i = 1; i < path.length; i++) cum.push(cum[i - 1] + Math.hypot(path[i][0] - path[i - 1][0], path[i][1] - path[i - 1][1]));
+        const total = cum.at(-1);
+        const at = sIn => { const sDist = closed ? ((sIn % total) + total) % total : Math.max(0, Math.min(total, sIn));
+          let i = cum.findIndex(c => c >= sDist); if (i <= 0) i = 1;
+          const t = (sDist - cum[i - 1]) / Math.max(1e-9, cum[i] - cum[i - 1]), a = path[i - 1], b = path[i];
+          return { p: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t], ang: Math.atan2(b[1] - a[1], b[0] - a[0]) }; };
+        const k = H / 140, glyphs = [...text].map(ch => ch === " " ? { w: H * 0.35 } : (() => { const g = textDesign(ch); return { g, w: g.w * k }; })());
+        const textLen = glyphs.reduce((a, g) => a + g.w, 0) + gap * (glyphs.length - 1);
+        if (!closed && textLen > total) throw new Error("the text is longer than the line – make the letters smaller.");
+        // centre the text: on the top (or bottom) of a closed shape, or the middle of a line; then shift by the % asked
+        let centre = total / 2;
+        if (closed) { let bi = 0; path.forEach((q, i) => { if (flip ? q[1] < path[bi][1] : q[1] > path[bi][1]) bi = i; }); centre = cum[bi]; }
+        let sCur = centre - textLen / 2 + total * startPct / 100;
+        const out = [];
+        for (const gl of glyphs) {
+          if (gl.g) {
+            const mid = at(sCur + gl.w / 2), c = Math.cos(mid.ang), sn = Math.sin(mid.ang);
+            for (const pth of gl.g.paths) out.push(pth.pts.map(([u, v]) => { const x = u * k - gl.w / 2, y = v * k + (flip ? 0.6 : 0.6);
+              return [mid.p[0] + x * c - y * sn, mid.p[1] + x * sn + y * c]; }));
+          }
+          sCur += gl.w + gap;
+        }
+        if (!out.length) throw new Error("the text doesn't fit on that line.");
+        pushUndo(true);
+        const { d, mx, my } = designFromMm(out, `"${text}" along ${curve.name}`); d.isText = true;
+        const n = { id: ++itemSeq, name: d.name, design: d, w: d.w, rot: 0, mirror: false, opts: { ...readOpts(), mode: "vcarve", bit: "vbit", depth: 2 }, x: mx, y: my };
+        presetFor(n.opts); items.push(n); multi.clear(); selectItem(n.id);
+      } catch (err) { alert("Sorry: " + err.message); }
+      busy(false);
+    }, "main"]]);
+  $("wizBody").querySelector("b").textContent = curve.name;
+}
+
+// ---------- 2D / 3D view in the main window ----------
+let in3d = false;
+async function setView3d(on) {
+  in3d = on; document.querySelectorAll("[data-view]").forEach(b => b.classList.toggle("sel", (b.dataset.view === "3d") === on));
+  $("main3d").hidden = !on;
+  if (!on) return draw();
+  if (!items.length) { $("main3d").hidden = true; in3d = false; return alert("Add something to the job first."); }
+  busy(true); await nextFrame();
+  try { const sm = simulateJob(); sm.stampTo(sm.moves.length); if (!view3d(sm, $("main3d"))) { alert("3D view isn't available in this browser."); setView3d(false); } }
+  catch (err) { alert("Sorry, the 3D view failed: " + err.message); }
+  busy(false);
+}
+
+// ---------- menus, toolbar and status bar ----------
+const MENUS = {
+  File: [["New job", () => { if (!items.length || confirm("Start a new job? Unsaved changes will be lost.")) { pushUndo(true); items = []; multi.clear(); selectItem(null); } }],
+         ["Ready-made projects…", () => { showTab("design"); $("projectSel").focus(); $("projectSel").showPicker?.(); }],
+         ["Open a saved job…", () => $("openJobBtn").click()], ["Save job…", () => $("saveJobBtn").click()], "-",
+         ["Import picture or SVG…", () => $("addDesignBtn").click()], ["Take a photo of a drawing…", () => $("camBtn").click()], "-",
+         ["Save G-code…", () => $("saveBtn").click()], ["Job diary", () => showTab("diary")], ["Install on this computer", () => $("installBtn").click()]],
+  Edit: [["Undo  (Ctrl+Z)", undo], ["Redo  (Ctrl+Y)", redo], "-", ["Select all", selectAll], ["Duplicate", () => $("dupBtn").click()], ["Copies…", () => $("copiesBtn").click()],
+         ["Delete", deleteSelection], "-", ["Weld (join)", () => combineShapes("weld")], ["Subtract", () => combineShapes("subtract")], ["Overlap only", () => combineShapes("intersect")],
+         ["Offset…", offsetShape], ["Mirror left–right", () => mirrorSel("h")], ["Mirror top–bottom", () => mirrorSel("v")], ["Text along a curve…", textOnCurve], ["Make points editable", () => { const it = sel(); if (it && it.vec) { pushUndo(true); toEditable(it); setTool("nodes"); refresh(); } else alert("Pick a shape drawn in Easy Carve first."); }]],
+  View: [["2D view", () => setView3d(false)], ["3D view", () => setView3d(true)], ["Zoom to the job", () => { $("zoom").checked = true; draw(); }], ["Show the whole machine", () => { $("zoom").checked = false; draw(); }],
+         ["Show my piece of wood", () => { showTab("design"); $("boardBox").open = true; $("boardOn").checked = true; readBoard(); refresh(); }], ["Preview the cut (animation)…", () => $("previewBtn").click()]],
+  Toolpaths: [["Toolpath settings", () => showTab("cut")], ["Preview the cut…", () => $("previewBtn").click()], ["Save G-code…", () => $("saveBtn").click()]],
+  Machine: [["Machine panel", () => showTab("machine")], ["Connect", () => { showTab("machine"); $("connectBtn").click(); }], ["Check my machine…", () => { showTab("machine"); $("checkBtn").click(); }], ["Copy report for help", () => { showTab("machine"); $("helpBox").open = true; $("copyReportBtn").click(); }]],
+  Help: [["Quick guide (PDF)", () => window.open("quick-guide.pdf", "_blank")], ["What do the error numbers mean?", () => { showTab("machine"); $("helpBox").open = true; }], ["About Easy Carve", () => alert(`${APP}\nFor the Genmitsu PROVerXL 4030 (GRBL).`)]],
+};
+function buildMenus() {
+  const bar = $("menubar");
+  for (const [name, entries] of Object.entries(MENUS)) {
+    const wrap = document.createElement("div"); wrap.className = "mbItem";
+    const btn = document.createElement("button"); btn.textContent = name; btn.className = "mbBtn";
+    const list = document.createElement("div"); list.className = "mbList"; list.hidden = true;
+    for (const e of entries) {
+      if (e === "-") { list.append(document.createElement("hr")); continue; }
+      const b = document.createElement("button"); b.textContent = e[0]; b.onclick = () => { closeMenus(); e[1](); }; list.append(b);
+    }
+    btn.onclick = ev => { ev.stopPropagation(); const open = list.hidden; closeMenus(); list.hidden = !open; };
+    btn.onmouseenter = () => { if ([...document.querySelectorAll(".mbList")].some(l => !l.hidden)) { closeMenus(); list.hidden = false; } };
+    wrap.append(btn, list); bar.append(wrap);
+  }
+  document.addEventListener("click", closeMenus);
+}
+function closeMenus() { document.querySelectorAll(".mbList").forEach(l => l.hidden = true); }
+function updateWsButtons() {
+  const n = selection().length, it = sel();
+  $("tbUndo").disabled = !undoStack.length; $("tbRedo").disabled = !redoStack.length;
+  document.querySelectorAll("[data-needs2]").forEach(b => b.disabled = n < 2);
+  document.querySelectorAll("[data-needs1]").forEach(b => b.disabled = n < 1);
+  $("stSel").textContent = !it ? "Nothing selected" : n > 1 ? `${n} pieces selected` : `${it.name} · ${fmt(itemBox(it).w.toFixed(1))} × ${fmt(itemBox(it).h.toFixed(1))} mm`;
+}
+document.querySelectorAll("[data-tool]").forEach(b => b.onclick = () => setTool(b.dataset.tool));
+document.querySelectorAll("[data-view]").forEach(b => b.onclick = () => setView3d(b.dataset.view === "3d"));
+$("tbUndo").onclick = undo; $("tbRedo").onclick = redo;
+$("tbWeld").onclick = () => combineShapes("weld"); $("tbSub").onclick = () => combineShapes("subtract"); $("tbInt").onclick = () => combineShapes("intersect");
+$("tbOffset").onclick = offsetShape; $("tbMirror").onclick = () => mirrorSel("h"); $("tbToc").onclick = textOnCurve;
+buildMenus(); setTool("select"); updateWsButtons();
+
+// ---------- the Modelling panel ----------
+$("modelHost").append($("reliefRows"));
+function renderLayers() {
+  const box = $("layerList"); if (!box) return; box.innerHTML = "";
+  const layers = items.filter(i => i.opts.mode === "relief");
+  if (!layers.length) { box.innerHTML = '<span class="hint">None yet.</span>'; }
+  for (const it of layers) { const b = document.createElement("button"); b.className = "chip" + (it.id === selId ? " sel" : "");
+    b.textContent = `${it.name.slice(0, 22)} · ${{ top: "on top", merge: "merge", cut: "cut into" }[it.opts.rCombine || "top"]}`; b.onclick = () => selectItem(it.id); box.append(b); }
+  $("make3dBtn").disabled = !sel() || sel().opts.mode === "relief";
+}
+$("make3dBtn").onclick = () => { if (!sel()) return; document.querySelector("label:has(input[value=relief])").click(); renderLayers(); };
+renderLayers();
+
 // ----- line up all the setting boxes -----
 function tidyRows(root = document) {
   root.querySelectorAll(".panel label:not(.check), dialog label:not(.check)").forEach(l => {
@@ -3329,7 +3847,7 @@ document.querySelectorAll(".nextBtn").forEach(b => b.onclick = () => showTab(b.d
 let startTab = "design"; try { startTab = localStorage.getItem("easyCarve.tab") || "design"; } catch {}
 showTab($("tab-" + startTab) ? startTab : "design");
 
-window.EasyCarve = { items: () => items, reliefCombined, editGrid, reliefState, fitReliefToWood, openReliefEditor, layerHeightsDesign, alignPiece, showTab, straightenPage, serializeJob, loadJob, diaryLoad, announce, sim: () => simState, simulateJob, openPreview, finishSim, centreOnBoard, board, makeInlay, inlayMaleModel, startProject, jigsawDesign, PROJECTS, buildJob, selectItem, addItem, shapeDesign, loadSvgText, makeGcode, makeTextDesign, setDesign, buildReport, explain, onLine, resumePlan, jobLines };
+window.EasyCarve = { items: () => items, setTool, combineShapes, offsetShape, mirrorSel, textOnCurve, undo, redo, selection, toEditable, rebuildVec, setView3d, vecOutline, reliefCombined, editGrid, reliefState, fitReliefToWood, openReliefEditor, layerHeightsDesign, alignPiece, showTab, straightenPage, serializeJob, loadJob, diaryLoad, announce, sim: () => simState, simulateJob, openPreview, finishSim, centreOnBoard, board, makeInlay, inlayMaleModel, startProject, jigsawDesign, PROJECTS, buildJob, selectItem, addItem, shapeDesign, loadSvgText, makeGcode, makeTextDesign, setDesign, buildReport, explain, onLine, resumePlan, jobLines };
 </script>
 </body>
 </html>
