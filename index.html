@@ -129,6 +129,7 @@
   .ok { background: #dafbe1; color: var(--go); padding: 8px 10px; border-radius: 8px; }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
   .chip { padding: 6px 10px; border-radius: 999px; font-size: 14px; }
+  .chip.off { opacity: .45; text-decoration: line-through; }
   .chip.sel { background: #eef4ff; border-color: var(--accent); font-weight: 600; }
   .row.small button, .row.small select { padding: 7px 8px; font-size: 14px; }
   canvas#cv { touch-action: none; cursor: grab; }
@@ -147,7 +148,7 @@
 <header class="ws">
   <div class="brand">Easy Carve</div>
   <nav id="menubar"></nav>
-  <span class="hint" style="margin-left:auto">v2.0 · Genmitsu PROVerXL 4030</span>
+  <span class="hint" style="margin-left:auto">v2.1 · Genmitsu PROVerXL 4030</span>
   <button id="installBtn" hidden style="padding:4px 10px">Install</button>
   <span id="connBadge">Machine not connected</span>
 </header>
@@ -257,6 +258,8 @@
     <h2>🏔️ Modelling (3D)</h2>
     <p class="hint">3D pieces are layers that build up into one carving, in the order of the pieces list.</p>
     <button id="make3dBtn" class="big">Make the selected piece a 3D layer</button>
+    <div class="row small"><button id="mouldBtn">〰 Moulding along the selected line…</button><button id="stlBtn">🧩 Import a 3D model (STL)…</button></div>
+    <input type="file" id="stlIn" accept=".stl,model/stl,application/sla" hidden>
     <div class="hint" style="margin-top:8px"><b>3D layers</b> (bottom first):</div>
     <div id="layerList" class="chips"></div>
     <div id="modelHost"></div>
@@ -278,8 +281,19 @@
     <label id="depthRow"><span id="depthLabel">How deep</span> <span><input id="depth" type="number" value="1.5" min="0.1" step="0.1"> mm</span></label>
     <div id="reliefRows" hidden>
       <label>How tall it stands <span><input id="rH" type="number" value="4" min="0.5" step="0.5"> mm</span></label>
-      <label>How rounded the edges <span><input id="rRound" type="number" value="6" min="0" step="1"> mm</span></label>
-      <div class="hint">0 = straight sides like a stamp; bigger = softer, more domed.</div>
+      <label>Profile <select id="rProfile"><option value="round">Round (domed)</option><option value="angle">Angled (chamfer)</option><option value="cove">Cove (hollow curve)</option><option value="ogee">Ogee (S-curve)</option><option value="flat">Flat top (stamp)</option></select></label>
+      <label id="rRoundRow">Width of the sloping edge <span><input id="rRound" type="number" value="6" min="0" step="1"> mm</span></label>
+      <label id="rMouldRow" hidden>Moulding width <span><input id="rMouldW" type="number" value="12" min="1" step="1"> mm</span></label>
+      <label>Limit height to <span><input id="rLimit" type="number" value="0" min="0" step="0.5"> mm</span></label>
+      <div class="hint">Bigger edge = softer, more domed. Limit 0 = no limit (otherwise the top is cut flat at that height).</div>
+      <details><summary>Tilt, fade and texture</summary>
+        <label>Tilt <span><input id="rTilt" type="number" value="0" min="-45" max="45" step="1"> °</span></label>
+        <label>Fade away <span><input id="rFade" type="number" value="0" min="0" max="100" step="5"> %</span></label>
+        <label>Rising / fading towards <select id="rDir"><option value="0">the right</option><option value="90">the back</option><option value="180">the left</option><option value="270">the front</option></select></label>
+        <label>Texture <select id="rTex"><option value="">none</option><option value="grain">Wood grain</option><option value="ripples">Ripples</option><option value="hammered">Hammered</option><option value="basket">Basket weave</option><option value="rough">Rough / rocky</option></select></label>
+        <label>Texture depth <span><input id="rTexAmp" type="number" value="0.6" min="0" step="0.1"> mm</span></label>
+        <label>Texture size <span><input id="rTexScale" type="number" value="6" min="0.5" step="0.5"> mm</span></label>
+      </details>
       <label id="rShadeRow">Pencil shading shapes it <span><small>none</small><input id="rShade" type="range" min="0" max="100" step="5" value="0"><small>lots</small></span></label>
       <label id="rShadeDirRow">Darker shading is <select id="rShadeDir"><option value="lower">lower (pushed in)</option><option value="higher">higher (stands out)</option></select></label>
       <label>Border around it <span><input id="rBorder" type="number" value="8" min="3" step="1"> mm</span></label>
@@ -406,6 +420,7 @@
       <div class="hint">Choose a tool, then click or drag on the picture:</div>
       <div class="row small"><button data-rtool="pick">👆 Pick an area</button><button data-rtool="raise">⬆ Raise</button></div>
       <div class="row small"><button data-rtool="lower">⬇ Lower</button><button data-rtool="smooth">〰 Smooth</button></div>
+      <div class="row small"><button data-rtool="smudge">👉 Smudge</button><button data-rtool="flatten">▬ Flatten</button></div>
       <div class="row small"><button data-rtool="lasso">✏️ Circle an area</button><button data-rtool="erase">🧽 Undo brushing</button></div>
       <div id="rEdArea" class="warn" hidden><b>This area</b> (highlighted)
         <label>Height <span><input id="rEdScale" type="range" min="0" max="250" step="5" value="100"><small id="rEdScaleOut">100%</small></span></label>
@@ -442,7 +457,7 @@
 
 <script>
 "use strict";
-const APP = "Easy Carve v2.0";
+const APP = "Easy Carve v2.1";
 const $ = id => document.getElementById(id);
 
 // ================= Presets =================
@@ -498,6 +513,9 @@ function showModeRows() {
   const cut = mode() === "cut", rel = mode() === "relief";
   $("depthRow").hidden = cut || rel; $("thickRow").hidden = !cut; $("skinRow").hidden = !cut; $("exactRow").hidden = !cut;
   $("reliefRows").hidden = !rel;
+  let kind = "shape"; try { kind = (sel() && sel().opts.rKind) || "shape"; } catch {}
+  $("rMouldRow").hidden = kind !== "moulding"; $("rRoundRow").hidden = kind !== "shape";
+  if ($("rEditBtn")) $("rEditBtn").disabled = kind === "moulding";
   $("depthLabel").textContent = mode() === "vcarve" ? "Deepest it goes" : "How deep";
   if ($("reliefMoved")) { $("reliefMoved").hidden = !rel; $("modelNone").hidden = rel; }
   const plug = mode() === "inlayM";
@@ -518,11 +536,11 @@ document.querySelectorAll("input[name=mode]").forEach(r => r.onchange = () => {
   if (mode() === "vcarve" && !BITS[$("bit").value].vbit) { $("bit").value = "vbit"; applyPreset(); return; }
   syncFromDom(); refresh();
 });
-["width", "offX", "offY", "rot", "rShade", "rBase", "depth", "thick", "skin", "exact", "rH", "rRound", "rBorder", "rLines", "rLineD", "rFinish", "feed", "plunge", "stepdown", "spindle", "safe", "airRun"]
+["width", "offX", "offY", "rot", "rShade", "rBase", "rLimit", "rTilt", "rFade", "rTexAmp", "rTexScale", "rMouldW", "depth", "thick", "skin", "exact", "rH", "rRound", "rBorder", "rLines", "rLineD", "rFinish", "feed", "plunge", "stepdown", "spindle", "safe", "airRun"]
   .forEach(id => $(id).addEventListener("input", () => { if (typeof syncFromDom === "function") syncFromDom(); refresh(); }));
 $("zoom").addEventListener("change", draw);
 $("rFinish").addEventListener("change", () => { syncFromDom(); refresh(); });
-["rShadeDir", "rCombine"].forEach(id => $(id).addEventListener("change", () => { syncFromDom(); refresh(); }));
+["rShadeDir", "rCombine", "rProfile", "rDir", "rTex"].forEach(id => $(id).addEventListener("change", () => { syncFromDom(); refresh(); }));
 $("rRough").addEventListener("change", () => refresh());
 ["skin", "exact", "rLines"].forEach(id => $(id).addEventListener("change", () => { syncFromDom(); refresh(); }));
 
@@ -1051,7 +1069,7 @@ $("useTextBtn").onclick = async () => { busy(true); await nextFrame(); makeTextD
 let items = [], selId = null, itemSeq = 0, pendingAdd = false;
 const sel = () => items.find(i => i.id === selId) || null;
 const OPT_IDS = ["bit", "depth", "thick", "skin", "exact", "feed", "plunge", "stepdown", "rH", "rRound", "rBorder", "rLines", "rLineD", "rFinish", "inS", "inP",
-                 "rShade", "rShadeDir", "rCombine", "rBase"];
+                 "rShade", "rShadeDir", "rCombine", "rBase", "rProfile", "rLimit", "rTilt", "rDir", "rFade", "rTex", "rTexAmp", "rTexScale", "rMouldW"];
 const MODE_NAMES = { engrave: "Engrave", vcarve: "V-carve", pocket: "Carve out", cut: "Cut out", relief: "3D raised", inlayM: "Inlay plug" };
 const MODE_ORDER = { engrave: 0, vcarve: 1, pocket: 2, relief: 3, cut: 9, inlayM: 10 };
 
@@ -1060,7 +1078,9 @@ function readOpts() {
   for (const id of OPT_IDS) { const e = $(id); if (e) o[id] = e.type === "checkbox" ? e.checked : e.value; }
   return o;
 }
+const OPT_DEFAULTS = { rShade: 0, rShadeDir: "lower", rCombine: "top", rBase: 0, rProfile: "round", rLimit: 0, rTilt: 0, rDir: "0", rFade: 0, rTex: "", rTexAmp: 0.6, rTexScale: 6, rMouldW: 12 };
 function writeOpts(o) {
+  o = { ...OPT_DEFAULTS, ...o };
   for (const id of OPT_IDS) if (id in o && $(id)) { const e = $(id); if (e.type === "checkbox") e.checked = o[id]; else e.value = o[id]; }
   const r = document.querySelector(`input[name=mode][value=${o.mode}]`); if (r) r.checked = true;
   showModeRows();
@@ -1084,7 +1104,7 @@ function selectItem(id) {
 }
 function syncFromDom() {
   const it = sel(); if (!it) return;
-  it.opts = readOpts();
+  it.opts = { ...it.opts, ...readOpts() };
   it.w = Math.max(1, +$("width").value || it.w); it.x = +$("offX").value || 0; it.y = +$("offY").value || 0; it.rot = +$("rot").value || 0;
   $("heightOut").textContent = fmt(itemBox(it).h.toFixed(1));
   renderItemList();
@@ -1408,18 +1428,146 @@ function sampleShade(d, x, y) {                         // x, y in drawing units
   return px < 0 || py < 0 || px >= S.W || py >= S.H ? 0 : S.v[py * S.W + px];
 }
 
-// --- height of one layer at a point, from its parts ---
-function layerHeight(o, rs, distMm, label, brush, shade, groove) {
-  const H = Math.max(0, +o.rH || 0), R = Math.max(0, +o.rRound || 0);
-  const t = R > 0 ? Math.min(1, Math.max(0, distMm) / R) : 1;
-  let h = H * Math.sqrt(Math.max(0, 1 - (1 - t) * (1 - t)));
+// ================= 3D modelling: profiles, tilt, fade, textures, mouldings, STL models =================
+const PROFILES = {
+  round: t => Math.sqrt(Math.max(0, 1 - (1 - t) * (1 - t))),
+  angle: t => t,
+  cove:  t => 1 - Math.sqrt(Math.max(0, 1 - t * t)),
+  ogee:  t => (1 - Math.cos(Math.PI * t)) / 2,
+  flat:  t => (t > 0 ? 1 : 0),
+};
+// smooth value noise for textures
+function vnoise(x, y) {
+  const h = (i, j) => { let n = (i * 374761393 + j * 668265263) | 0; n = (n ^ (n >>> 13)) * 1274126177 | 0; return ((n ^ (n >>> 16)) >>> 0) / 4294967296; };
+  const xi = Math.floor(x), yi = Math.floor(y), fx = x - xi, fy = y - yi, sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+  const a = h(xi, yi), b = h(xi + 1, yi), c = h(xi, yi + 1), d = h(xi + 1, yi + 1);
+  return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy;
+}
+const TEXTURES = {
+  grain:    (x, y, s) => 0.5 + 0.5 * Math.sin(2 * Math.PI * (y / s + 0.35 * vnoise(x / (s * 6), y / (s * 2)) * 4)),
+  ripples:  (x, y, s) => 0.5 + 0.5 * Math.sin(2 * Math.PI * Math.hypot(x, y) / s),
+  hammered: (x, y, s) => { const v = vnoise(x / s, y / s); return 1 - Math.abs(v * 2 - 1); },
+  basket:   (x, y, s) => { const i = Math.floor(x / s), j = Math.floor(y / s), fx = x / s - i, fy = y / s - j; return (i + j) % 2 ? Math.sin(Math.PI * fx) : Math.sin(Math.PI * fy); },
+  rough:    (x, y, s) => 0.6 * vnoise(x / s, y / s) + 0.4 * vnoise(x / (s * 0.37), y / (s * 0.37)),
+};
+function sampleHmap(d, u, v) {
+  const M = d.hmap; if (!M) return 0;
+  const fx = u + d.ox, fy = d.oyTop - v, x0 = Math.floor(fx), y0 = Math.floor(fy), ax = fx - x0, ay = fy - y0;
+  const g = (x, y) => (x < 0 || y < 0 || x >= M.W || y >= M.H ? 0 : M.v[y * M.W + x]);
+  return (g(x0, y0) * (1 - ax) + g(x0 + 1, y0) * ax) * (1 - ay) + (g(x0, y0 + 1) * (1 - ax) + g(x0 + 1, y0 + 1) * ax) * ay;
+}
+
+// height of one layer at a point. P: { dist (mm in from the edge), label, brush, shade, groove, u, v (drawing units) }
+function layerHeight(it, P) {
+  const o = it.opts, rs = reliefState(it), d = it.design, s = it.w / d.w, kind = o.rKind || "shape";
+  const H = Math.max(0, +o.rH || 0);
+  const R = kind === "moulding" ? Math.max(0.1, (+o.rMouldW || 12) / 2) : Math.max(0, +o.rRound || 0);
+  const t = R > 0 ? Math.min(1, Math.max(0, P.dist) / R) : 1;
+  let h = kind === "model" ? H * sampleHmap(d, P.u, P.v) : H * (PROFILES[o.rProfile] || PROFILES.round)(t);
   const amt = Math.max(0, Math.min(100, +o.rShade || 0)) / 100;
-  if (amt > 0) h *= o.rShadeDir === "higher" ? 1 - amt * (1 - shade) : 1 - amt * shade;
-  const reg = label && rs.regions[label];
+  if (amt > 0) h *= o.rShadeDir === "higher" ? 1 - amt * (1 - P.shade) : 1 - amt * P.shade;
+  const reg = P.label && rs.regions[P.label];
   if (reg) h = h * (reg.scale ?? 1) + (reg.add || 0) * t;
-  h += brush || 0;
-  h -= groove;
+  // tilt and fade along a direction across the piece
+  const tilt = +o.rTilt || 0, fade = Math.max(0, Math.min(100, +o.rFade || 0)) / 100;
+  if ((tilt || fade) && h > 0) {
+    const a = (+o.rDir || 0) * Math.PI / 180, ca = Math.cos(a), sa = Math.sin(a);
+    const ext = Math.abs(ca) * d.w + Math.abs(sa) * d.h, lo = Math.min(0, ca * d.w) + Math.min(0, sa * d.h);
+    const f = Math.max(0, Math.min(1, (P.u * ca + P.v * sa - lo) / Math.max(1e-6, ext)));   // 0 at the start side, 1 at the far side
+    if (fade) h *= 1 - fade * f;
+    if (tilt) h += f * ext * s * Math.tan(Math.min(60, Math.abs(tilt)) * Math.PI / 180) * Math.sign(tilt);
+  }
+  // texture on the surface
+  const tex = TEXTURES[o.rTex];
+  if (tex && h > 0) { const amp = Math.max(0, +o.rTexAmp || 0), sc = Math.max(0.5, +o.rTexScale || 6);
+    h += amp * (tex(P.u * s, P.v * s, sc) - 0.5) * Math.min(1, t * 3); }
+  h += P.brush || 0;
+  h -= P.groove || 0;
+  if (+o.rLimit > 0) h = Math.min(h, +o.rLimit);
   return Math.max(0, h);
+}
+
+// ----- moulding: a profile swept along a line -----
+function makeMoulding() {
+  const it = sel();
+  if (!it) return alert("First draw (or pick) the line the moulding should follow – a curve, a line, or a shape's outline.");
+  wiz("Moulding along a line", `<p>Sweeps a profile along <b></b> – for borders, frames and trims.</p>
+    <label>Profile <select id="mProf"><option value="round">Round (bead)</option><option value="ogee">Ogee (S-curve)</option><option value="cove">Cove (hollow)</option><option value="angle">Chamfer (V-shaped ridge)</option><option value="flat">Flat strip</option></select></label>
+    <label>Width <span><input id="mW" type="number" value="12" min="1" step="1"> mm</span></label>
+    <label>Height <span><input id="mH" type="number" value="4" min="0.2" step="0.5"> mm</span></label>
+    <p class="hint">It becomes a 3D layer; change it later in the Modelling panel. (Width stays the same along the line.)</p>`,
+    [["Cancel", wizClose], ["Make it", () => {
+      const prof = $("mProf").value, W = Math.max(1, +$("mW").value || 12), H = Math.max(0.2, +$("mH").value || 4); wizClose();
+      pushUndo(true);
+      it.opts = { ...it.opts, mode: "relief", rKind: "moulding", rProfile: prof, rMouldW: W, rH: H, rLines: false };
+      if (!BITS[it.opts.bit].ball) it.opts.bit = "ball3"; presetFor(it.opts);
+      it.name = it.name.replace(/ \(moulding\)$/, "") + " (moulding)";
+      selectItem(it.id); showTab("model");
+    }, "main"]]);
+  $("wizBody").querySelector("b").textContent = it.name;
+}
+
+// ----- STL 3D models -----
+function parseSTL(buf) {
+  const dv = new DataView(buf), n = buf.byteLength >= 84 ? dv.getUint32(80, true) : 0;
+  const tris = [];
+  if (n > 0 && 84 + n * 50 === buf.byteLength) {                      // binary
+    for (let i = 0; i < n; i++) { const o = 84 + i * 50 + 12, t = [];
+      for (let k = 0; k < 3; k++) t.push([dv.getFloat32(o + k * 12, true), dv.getFloat32(o + k * 12 + 4, true), dv.getFloat32(o + k * 12 + 8, true)]);
+      tris.push(t); }
+  } else {                                                              // text
+    const txt = new TextDecoder().decode(buf), re = /vertex\s+([-\d.eE+]+)\s+([-\d.eE+]+)\s+([-\d.eE+]+)/g; let m, cur = [];
+    while ((m = re.exec(txt))) { cur.push([+m[1], +m[2], +m[3]]); if (cur.length === 3) { tris.push(cur); cur = []; } }
+  }
+  if (!tris.length) throw new Error("No triangles found – is it an STL file?");
+  return tris;
+}
+// look down on the model from above: highest point under every spot
+function stlHeightmap(tris, up) {
+  const map = up === "y" ? ([x, y, z]) => [x, -z, y] : up === "x" ? ([x, y, z]) => [y, z, x] : p => p;
+  tris = tris.map(t => t.map(map));
+  let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
+  for (const t of tris) for (const [x, y, z] of t) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
+  const k = 500 / Math.max(x1 - x0, y1 - y0), pad = 3, W = Math.ceil((x1 - x0) * k) + 2 * pad, H = Math.ceil((y1 - y0) * k) + 2 * pad;
+  const hm = new Float32Array(W * H).fill(-1);
+  for (const t of tris) {
+    const P = t.map(([x, y, z]) => [(x - x0) * k + pad, (y1 - y) * k + pad, (z - z0) / Math.max(1e-9, z1 - z0)]);
+    const minx = Math.max(0, Math.floor(Math.min(P[0][0], P[1][0], P[2][0]))), maxx = Math.min(W - 1, Math.ceil(Math.max(P[0][0], P[1][0], P[2][0])));
+    const miny = Math.max(0, Math.floor(Math.min(P[0][1], P[1][1], P[2][1]))), maxy = Math.min(H - 1, Math.ceil(Math.max(P[0][1], P[1][1], P[2][1])));
+    const [a, b, c] = P, den = (b[1] - c[1]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[1] - c[1]);
+    if (Math.abs(den) < 1e-12) continue;
+    for (let y = miny; y <= maxy; y++) for (let x = minx; x <= maxx; x++) {
+      const px = x + 0.5, py = y + 0.5;
+      const l1 = ((b[1] - c[1]) * (px - c[0]) + (c[0] - b[0]) * (py - c[1])) / den, l2 = ((c[1] - a[1]) * (px - c[0]) + (a[0] - c[0]) * (py - c[1])) / den, l3 = 1 - l1 - l2;
+      if (l1 < -1e-6 || l2 < -1e-6 || l3 < -1e-6) continue;
+      const z = l1 * a[2] + l2 * b[2] + l3 * c[2], i = y * W + x; if (z > hm[i]) hm[i] = z;
+    }
+  }
+  return { hm, W, H, mmW: x1 - x0, mmH: y1 - y0, mmZ: z1 - z0, k };
+}
+async function importSTL(file) {
+  const up = await new Promise(res => wiz("Import a 3D model", `<p><b></b></p>
+    <label>Which way is up? <select id="stlUp"><option value="z">Z is up (most models)</option><option value="y">Y is up</option><option value="x">X is up</option></select></label>
+    <p class="hint">Easy Carve looks down on the model from above and carves what it sees, like Aspire's model import. You can resize it and set its height afterwards.</p>`,
+    [["Cancel", () => { wizClose(); res(null); }], ["Import", () => { const v = $("stlUp").value; wizClose(); res(v); }, "main"]]) || ($("wizBody").querySelector("b").textContent = file.name, 0));
+  if (!up) return;
+  busy(true); await nextFrame();
+  try {
+    const M = stlHeightmap(parseSTL(await file.arrayBuffer()), up), { hm, W, H } = M;
+    const mask = new Float32Array(W * H); for (let i = 0; i < mask.length; i++) mask[i] = hm[i] >= 0 ? 1 : 0;
+    const f = boxBlur(mask, W, H, 1);
+    for (let x = 0; x < W; x++) { f[x] = 0; f[(H - 1) * W + x] = 0; } for (let y = 0; y < H; y++) { f[y * W] = 0; f[y * W + W - 1] = 0; }
+    const loops = traceIso(f, W, H, 0.5).filter(l => Math.abs(polyArea(l)) > 20);
+    if (!loops.length) throw new Error("The model came out empty from above – try a different 'up' direction.");
+    const d = normalize(loops, M.mmW / (W - 6));
+    d.hmap = { v: Float32Array.from(hm, z => Math.max(0, z)), W, H }; d.name = file.name.replace(/\.stl$/i, "");
+    pushUndo(true);
+    const it = addItem(d, d.name);
+    it.opts = { ...it.opts, mode: "relief", rKind: "model", rH: +Math.min(12, Math.max(1, M.mmZ)).toFixed(1), rLines: false, rShade: 0, rRound: 0 };
+    if (!BITS[it.opts.bit].ball) it.opts.bit = "ball3"; presetFor(it.opts);
+    selectItem(it.id); showTab("model");
+  } catch (err) { alert("Sorry, that model couldn't be imported: " + err.message); }
+  busy(false);
 }
 
 // inverse of the piece's placement: world mm -> drawing units
@@ -1449,7 +1597,8 @@ const reliefCache2 = new Map();
 function reliefLayersKey(layers, bitKey) {
   return JSON.stringify([bitKey, board.on, board.w, board.h, board.t, board.full,
     layers.map(it => [localKey(it), it.id, it.x, it.y, it.opts.rH, it.opts.rRound, it.opts.rBorder, it.opts.rLines, it.opts.rLineD,
-      it.opts.rShade, it.opts.rShadeDir, it.opts.rCombine, it.opts.rBase, it.opts.rFinish, it.opts.stepdown, reliefState(it).ver])]);
+      it.opts.rShade, it.opts.rShadeDir, it.opts.rCombine, it.opts.rBase, it.opts.rFinish, it.opts.stepdown, reliefState(it).ver,
+      it.opts.rKind, it.opts.rProfile, it.opts.rLimit, it.opts.rTilt, it.opts.rDir, it.opts.rFade, it.opts.rTex, it.opts.rTexAmp, it.opts.rTexScale, it.opts.rMouldW, it.opts.rOff])]);
 }
 
 // all the 3D layers of one step -> one carving
@@ -1457,14 +1606,14 @@ function reliefCombined(layers, bitKey, rough) {
   const key = reliefLayersKey(layers, bitKey) + (rough ? "|rough" : "");
   if (reliefCache2.has(key)) return reliefCache2.get(key);
   const bit = BITS[bitKey], r = bit.dia / 2;
-  const withShape = layers.filter(it => localPaths(it).paths.some(p => p.closed));
+  const withShape = layers.filter(it => !it.opts.rOff && (it.opts.rKind === "moulding" ? localPaths(it).paths.length : localPaths(it).paths.some(p => p.closed)));
   if (!withShape.length) {
     const val = { note: "3D raised carving needs a closed outline. For a drawing, choose 'a drawing – 3D raised carving' when opening it.", rows: [], rough: [], D: 0 };
     reliefCache2.set(key, val); return val;
   }
   // area to carve: around the layers, or the whole piece of wood
   let ax0 = Infinity, ay0 = Infinity, ax1 = -Infinity, ay1 = -Infinity;
-  for (const it of withShape) { const b = itemBox(it), B = Math.max(3, +it.opts.rBorder || 8);
+  for (const it of withShape) { const b = itemBox(it), B = Math.max(3, +it.opts.rBorder || 8) + (it.opts.rKind === "moulding" ? (+it.opts.rMouldW || 12) / 2 : 0);
     ax0 = Math.min(ax0, b.x - B); ay0 = Math.min(ay0, b.y - B); ax1 = Math.max(ax1, b.x + b.w + B); ay1 = Math.max(ay1, b.y + b.h + B); }
   if (board.on) {
     const m = r + 0.5;
@@ -1478,10 +1627,18 @@ function reliefCombined(layers, bitKey, rough) {
   const notes = [];
   for (const it of withShape) {
     const o = it.opts, rs = reliefState(it), placed = placedPaths(it);
-    const closed = placed.filter(p => p.closed), open = placed.filter(p => !p.closed);
-    const inside = rasterizeFrame(closed, x0, y1, W, H, res);
-    const notIn = new Uint8Array(W * H); for (let i = 0; i < notIn.length; i++) notIn[i] = 1 - inside[i];
-    const dIn = edt(notIn, W, H);
+    const moulding = o.rKind === "moulding", halfW = (+o.rMouldW || 12) / 2;
+    const closed = placed.filter(p => p.closed), open = moulding ? [] : placed.filter(p => !p.closed);
+    let inside, dIn;
+    if (moulding) {                                       // a band along the line; "in from the edge" = halfway across minus distance to the line
+      inside = rasterizeFrame(placed, x0, y1, W, H, res, 2 * halfW * res);
+      const dC = edt(rasterizeFrame(placed, x0, y1, W, H, res, 1), W, H);
+      dIn = new Float32Array(W * H); for (let i = 0; i < dIn.length; i++) dIn[i] = Math.max(0, halfW * res - dC[i]) + 0.5;
+    } else {
+      inside = rasterizeFrame(closed, x0, y1, W, H, res);
+      const notIn = new Uint8Array(W * H); for (let i = 0; i < notIn.length; i++) notIn[i] = 1 - inside[i];
+      dIn = edt(notIn, W, H);
+    }
     let dL = null;
     const lineD = o.rLines ? Math.max(0, +o.rLineD || 0) : 0;
     if (lineD > 0 && open.length) dL = edt(rasterizeFrame(open, x0, y1, W, H, res, 1.5), W, H);
@@ -1494,8 +1651,8 @@ function reliefCombined(layers, bitKey, rough) {
       const ex = Math.round(2 + u * E.k), ey = Math.round(2 + (d.h - v) * E.k);
       const ei = ex >= 0 && ey >= 0 && ex < E.W && ey < E.H ? ey * E.W + ex : -1;
       const groove = dL && dL[i] < half ? lineD * (1 - dL[i] / half) : 0;
-      const h = layerHeight(o, rs, (dIn[i] - 0.5) / res, ei >= 0 ? LAB[ei] : 0, ei >= 0 && rs.brush ? rs.brush[ei] : 0,
-                            o.rShade > 0 ? sampleShade(d, u, v) : 0, groove);
+      const h = layerHeight(it, { dist: (dIn[i] - 0.5) / res, label: ei >= 0 ? LAB[ei] : 0, brush: ei >= 0 && rs.brush ? rs.brush[ei] : 0,
+                            shade: o.rShade > 0 ? sampleShade(d, u, v) : 0, groove, u, v });
       if (mode === "merge") acc[i] = Math.max(acc[i], base + h);
       else if (mode === "cut") acc[i] = Math.max(0, acc[i] - (base + h));
       else acc[i] = acc[i] + base + h;
@@ -1579,7 +1736,7 @@ function layerHeightsDesign(it) {
   for (let ey = 0; ey < E.H; ey++) for (let ex = 0; ex < E.W; ex++) {
     const i = ey * E.W + ex; if (!E.inside[i]) continue;
     const u = (ex - 2) / E.k, v = d.h - (ey - 2) / E.k;
-    h[i] = layerHeight(o, rs, (dIn[i] - 0.5) / E.k * s, LAB[i], rs.brush ? rs.brush[i] : 0, o.rShade > 0 ? sampleShade(d, u, v) : 0, 0);
+    h[i] = layerHeight(it, { dist: (dIn[i] - 0.5) / E.k * s, label: LAB[i], brush: rs.brush ? rs.brush[i] : 0, shade: o.rShade > 0 ? sampleShade(d, u, v) : 0, groove: 0, u, v });
   }
   return h;
 }
@@ -1624,6 +1781,14 @@ function rEdBrush(ex, ey) {
   const radMm = +$("rEdSize").value, rad = Math.max(1, radMm / s * E.k), str = +$("rEdStrength").value / 100 * 0.6, tool = rEd.tool;
   const x0 = Math.max(0, Math.floor(ex - rad)), x1 = Math.min(E.W - 1, Math.ceil(ex + rad)), y0 = Math.max(0, Math.floor(ey - rad)), y1 = Math.min(E.H - 1, Math.ceil(ey + rad));
   let avg = 0, n = 0;
+  if (tool === "flatten" || tool === "smudge") {
+    const h = layerHeightsDesign(it);
+    if (rEd.target == null) { const i0 = Math.round(ey) * E.W + Math.round(ex); rEd.target = h[i0] || 0; }
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const i = y * E.W + x, dd = Math.hypot(x - ex, y - ey) / rad; if (dd > 1 || !E.inside[i]) continue;
+      const f = Math.exp(-dd * dd * 3) * str; rs.brush[i] += (rEd.target - h[i]) * f; }
+    if (tool === "smudge") { const i0 = Math.round(ey) * E.W + Math.round(ex); rEd.target = rEd.target * 0.7 + (h[i0] || 0) * 0.3; }   // carries the height along
+    return;
+  }
   if (tool === "smooth") { const h = layerHeightsDesign(it); for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const i = y * E.W + x; if (E.inside[i]) { avg += h[i]; n++; } } avg /= Math.max(1, n);
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const i = y * E.W + x, dd = Math.hypot(x - ex, y - ey) / rad; if (dd > 1 || !E.inside[i]) continue;
       const f = Math.exp(-dd * dd * 3) * str; rs.brush[i] += (avg - h[i]) * f; } return; }
@@ -2058,7 +2223,7 @@ $("rEdCanvas").onpointermove = e => {
     g.beginPath(); const a = lassoPts[lassoPts.length - 2]; g.moveTo(a[0], a[1]); g.lineTo(x, y); g.stroke(); return; }
   if (!rEdDown) return; const [x, y] = rEdPoint(e); rEdBrush(x, y); rEdChanged(); };
 $("rEdCanvas").onpointerup = () => {
-  rEdDown = false;
+  rEdDown = false; if (rEd) rEd.target = null;
   if (lassoPts) {
     const pts = lassoPts; lassoPts = null;
     if (pts.length < 5) return drawReliefEditor();
@@ -2549,20 +2714,31 @@ function announce(ok, what) {
 // ================= Saving jobs & the job diary =================
 function serializeJob() {
   return { app: APP, v: 1, material: $("material").value, board: { ...board },
-    items: items.map(it => ({ name: it.name, w: it.w, rot: it.rot, mirror: it.mirror, x: it.x, y: it.y, opts: { ...it.opts },
+    items: items.map(it => ({ name: it.name, w: it.w, rot: it.rot, mirror: it.mirror, x: it.x, y: it.y, opts: { ...it.opts }, vec: it.vec || null,
       relief: it.relief ? { regions: it.relief.regions, lassos: it.relief.lassos || [], brush: it.relief.brush ? (() => { const b = []; it.relief.brush.forEach((v, i) => { if (Math.abs(v) > 0.005) b.push(i, +v.toFixed(3)); }); return { n: it.relief.brush.length, b }; })() : null } : null,
-      design: { name: it.design.name, w: it.design.w, h: it.design.h, naturalMm: it.design.naturalMm, isText: !!it.design.isText, ox: it.design.ox, oyTop: it.design.oyTop,
+      design: { name: it.design.name, w: it.design.w, h: it.design.h, naturalMm: it.design.naturalMm, isText: !!it.design.isText, isVec: !!it.design.isVec, ox: it.design.ox, oyTop: it.design.oyTop,
+                hmap: it.design.hmap ? packHmap(it.design.hmap) : null,
                 paths: it.design.paths.map(p => ({ closed: p.closed, pts: p.pts })) } })) };
+}
+// 3D model heights, stored exactly (32-bit) in base64
+function packHmap(M) {
+  const bytes = new Uint8Array(Float32Array.from(M.v).buffer); let str = "";
+  for (let i = 0; i < bytes.length; i += 32768) str += String.fromCharCode.apply(null, bytes.subarray(i, i + 32768));
+  return { W: M.W, H: M.H, f32: btoa(str) };
+}
+function unpackHmap(P) {
+  const bin = atob(P.f32), bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return { W: P.W, H: P.H, v: new Float32Array(bytes.buffer) };
 }
 function loadJob(o) {
   if (!o || !Array.isArray(o.items)) throw new Error("That isn't an Easy Carve job file.");
   items = []; const byKey = new Map();
   for (const s of o.items) {
     const k = JSON.stringify([s.design.name, s.design.w, s.design.h, s.design.paths.length]);
-    if (!byKey.has(k)) byKey.set(k, { ...s.design, id: ++designSeq });
+    if (!byKey.has(k)) byKey.set(k, { ...s.design, id: ++designSeq, hmap: s.design.hmap ? unpackHmap(s.design.hmap) : undefined });
     const rl = s.relief ? { regions: s.relief.regions || {}, lassos: s.relief.lassos || [], ver: 1, brush: null } : undefined;
     if (rl && s.relief.brush) { rl.brush = new Float32Array(s.relief.brush.n); for (let j = 0; j < s.relief.brush.b.length; j += 2) rl.brush[s.relief.brush.b[j]] = s.relief.brush.b[j + 1]; }
-    items.push({ ...s, id: ++itemSeq, design: byKey.get(k), opts: { ...s.opts }, relief: rl });
+    items.push({ ...s, id: ++itemSeq, design: byKey.get(k), opts: { ...s.opts }, relief: rl, vec: s.vec || undefined });
   }
   if (o.material && MATERIALS[o.material]) $("material").value = o.material;
   if (o.board) { $("boardOn").checked = !!o.board.on; $("boardW").value = o.board.w; $("boardH").value = o.board.h; $("boardT").value = o.board.t; readBoard(); }
@@ -3757,7 +3933,7 @@ const MENUS = {
   File: [["New job", () => { if (!items.length || confirm("Start a new job? Unsaved changes will be lost.")) { pushUndo(true); items = []; multi.clear(); selectItem(null); } }],
          ["Ready-made projects…", () => { showTab("design"); $("projectSel").focus(); $("projectSel").showPicker?.(); }],
          ["Open a saved job…", () => $("openJobBtn").click()], ["Save job…", () => $("saveJobBtn").click()], "-",
-         ["Import picture or SVG…", () => $("addDesignBtn").click()], ["Take a photo of a drawing…", () => $("camBtn").click()], "-",
+         ["Import picture or SVG…", () => $("addDesignBtn").click()], ["Import a 3D model (STL)…", () => $("stlIn").click()], ["Take a photo of a drawing…", () => $("camBtn").click()], "-",
          ["Save G-code…", () => $("saveBtn").click()], ["Job diary", () => showTab("diary")], ["Install on this computer", () => $("installBtn").click()]],
   Edit: [["Undo  (Ctrl+Z)", undo], ["Redo  (Ctrl+Y)", redo], "-", ["Select all", selectAll], ["Duplicate", () => $("dupBtn").click()], ["Copies…", () => $("copiesBtn").click()],
          ["Delete", deleteSelection], "-", ["Weld (join)", () => combineShapes("weld")], ["Subtract", () => combineShapes("subtract")], ["Overlap only", () => combineShapes("intersect")],
@@ -3805,10 +3981,17 @@ function renderLayers() {
   const box = $("layerList"); if (!box) return; box.innerHTML = "";
   const layers = items.filter(i => i.opts.mode === "relief");
   if (!layers.length) { box.innerHTML = '<span class="hint">None yet.</span>'; }
-  for (const it of layers) { const b = document.createElement("button"); b.className = "chip" + (it.id === selId ? " sel" : "");
-    b.textContent = `${it.name.slice(0, 22)} · ${{ top: "on top", merge: "merge", cut: "cut into" }[it.opts.rCombine || "top"]}`; b.onclick = () => selectItem(it.id); box.append(b); }
+  for (const it of layers) {
+    const eye = document.createElement("button"); eye.className = "chip"; eye.title = it.opts.rOff ? "Hidden – click to show" : "Shown – click to hide";
+    eye.textContent = it.opts.rOff ? "🚫" : "👁"; eye.onclick = () => { pushUndo(true); it.opts.rOff = !it.opts.rOff; selectItem(it.id); };
+    const b = document.createElement("button"); b.className = "chip" + (it.id === selId ? " sel" : "") + (it.opts.rOff ? " off" : "");
+    b.textContent = `${it.name.slice(0, 22)} · ${{ top: "on top", merge: "merge", cut: "cut into" }[it.opts.rCombine || "top"]}`; b.onclick = () => selectItem(it.id);
+    const row = document.createElement("div"); row.style.display = "flex"; row.style.gap = "4px"; row.append(eye, b); box.append(row); }
   $("make3dBtn").disabled = !sel() || sel().opts.mode === "relief";
 }
+$("mouldBtn").onclick = () => makeMoulding();
+$("stlBtn").onclick = () => $("stlIn").click();
+$("stlIn").onchange = async e => { const f = e.target.files[0]; e.target.value = ""; if (f) await importSTL(f); };
 $("make3dBtn").onclick = () => { if (!sel()) return; document.querySelector("label:has(input[value=relief])").click(); renderLayers(); };
 renderLayers();
 
@@ -3847,7 +4030,7 @@ document.querySelectorAll(".nextBtn").forEach(b => b.onclick = () => showTab(b.d
 let startTab = "design"; try { startTab = localStorage.getItem("easyCarve.tab") || "design"; } catch {}
 showTab($("tab-" + startTab) ? startTab : "design");
 
-window.EasyCarve = { items: () => items, setTool, combineShapes, offsetShape, mirrorSel, textOnCurve, undo, redo, selection, toEditable, rebuildVec, setView3d, vecOutline, reliefCombined, editGrid, reliefState, fitReliefToWood, openReliefEditor, layerHeightsDesign, alignPiece, showTab, straightenPage, serializeJob, loadJob, diaryLoad, announce, sim: () => simState, simulateJob, openPreview, finishSim, centreOnBoard, board, makeInlay, inlayMaleModel, startProject, jigsawDesign, PROJECTS, buildJob, selectItem, addItem, shapeDesign, loadSvgText, makeGcode, makeTextDesign, setDesign, buildReport, explain, onLine, resumePlan, jobLines };
+window.EasyCarve = { items: () => items, layerHeight, importSTL, stlHeightmap, parseSTL, makeMoulding, PROFILES, TEXTURES, setTool, combineShapes, offsetShape, mirrorSel, textOnCurve, undo, redo, selection, toEditable, rebuildVec, setView3d, vecOutline, reliefCombined, editGrid, reliefState, fitReliefToWood, openReliefEditor, layerHeightsDesign, alignPiece, showTab, straightenPage, serializeJob, loadJob, diaryLoad, announce, sim: () => simState, simulateJob, openPreview, finishSim, centreOnBoard, board, makeInlay, inlayMaleModel, startProject, jigsawDesign, PROJECTS, buildJob, selectItem, addItem, shapeDesign, loadSvgText, makeGcode, makeTextDesign, setDesign, buildReport, explain, onLine, resumePlan, jobLines };
 </script>
 </body>
 </html>
