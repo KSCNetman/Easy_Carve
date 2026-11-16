@@ -154,7 +154,7 @@
 <header class="ws">
   <div class="brand">Easy Carve</div>
   <nav id="menubar"></nav>
-  <span class="hint" style="margin-left:auto">v2.2 · Genmitsu PROVerXL 4030</span>
+  <span class="hint" style="margin-left:auto">v2.3 · Genmitsu PROVerXL 4030</span>
   <button id="installBtn" hidden style="padding:4px 10px">Install</button>
   <span id="connBadge">Machine not connected</span>
 </header>
@@ -248,7 +248,9 @@
     <label>Gap from left edge <span><input id="offX" type="number" value="10" step="1"> mm</span></label>
     <label>Gap from front edge <span><input id="offY" type="number" value="10" step="1"> mm</span></label>
     <label>Turn it <span><input id="rot" type="number" value="0" step="15"> °</span></label>
-    <details id="boardBox"><summary>My piece of wood (size check &amp; centring)</summary>
+    <details id="boardBox"><summary>Job setup – my piece of wood &amp; where zero is</summary>
+      <label>Start point (X0 Y0) <select id="zeroXY"><option value="fl">front-left corner of the wood</option><option value="fr">front-right corner</option><option value="bl">back-left corner</option><option value="br">back-right corner</option><option value="c">centre of the wood</option></select></label>
+      <label>Height zero (Z0) <select id="zeroZ"><option value="top">top of the wood</option><option value="bottom">machine bed (under the wood)</option></select></label>
       <label class="check"><input type="checkbox" id="boardOn"><span>Show my wood on the picture and check the job fits</span></label>
       <label>Width (left to right) <span><input id="boardW" type="number" value="300" min="10"> mm</span></label>
       <label>Depth (front to back) <span><input id="boardH" type="number" value="200" min="10"> mm</span></label>
@@ -475,7 +477,7 @@
 
 <script>
 "use strict";
-const APP = "Easy Carve v2.2";
+const APP = "Easy Carve v2.3";
 const $ = id => document.getElementById(id);
 
 // ================= Presets =================
@@ -2173,6 +2175,24 @@ function emitOp(op) {
   return { text: g.join("\n") + "\n", minutes, notes, preview, rasters, maxDepth, reliefD: RM ? RM.D || 0 : 0 };
 }
 
+// where X0 Y0 and Z0 are, in the job's own frame (front-left corner of the wood = 0,0; top of the wood = Z 0)
+function originOf() {
+  const z = $("zeroXY").value, w = board.w, h = board.h;
+  let o = [0, 0];
+  if (z === "fr") o = [w, 0]; else if (z === "bl") o = [0, h]; else if (z === "br") o = [w, h]; else if (z === "c") o = [w / 2, h / 2];
+  return { x: o[0], y: o[1], z: $("zeroZ").value === "bottom" ? board.t : 0 };
+}
+function toMachineFrame(text) {
+  const O = originOf(); if (!O.x && !O.y && !O.z) return text;
+  return text.split("\n").map(l => /^G[01]\b/.test(l) && l !== "G0 X0 Y0"     // the end-of-job park goes to the start point
+    ? l.replace(/X(-?[\d.]+)/, (m, v) => "X" + fmt(+v - O.x)).replace(/Y(-?[\d.]+)/, (m, v) => "Y" + fmt(+v - O.y)).replace(/Z(-?[\d.]+)/, (m, v) => "Z" + fmt(+v + O.z))
+    : l).join("\n");
+}
+function updateZeroLabels() {
+  const xy = { fl: "front-left corner", fr: "front-right corner", bl: "back-left corner", br: "back-right corner", c: "centre" }[$("zeroXY").value];
+  $("zeroXYBtn").textContent = `Bit is over the ${xy} of the wood → set as start`;
+  $("zeroZBtn").textContent = $("zeroZ").value === "bottom" ? "Bit is touching the machine bed → set as height zero" : "Bit is touching the top of the wood → set as surface";
+}
 function buildJob() {
   const groups = new Map();
   for (const it of items) { const k = it.opts.bit + (it.opts.mode === "inlayM" ? "|plug" : ""); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(it); }
@@ -2192,6 +2212,7 @@ function buildJob() {
   ops.sort((a, b) => a.last - b.last);                    // anything that cuts pieces free goes last
   if (opOrder.length) { const pos = op => { const i = opOrder.indexOf(opKey(op)); return i < 0 ? 1e6 + op.last : i; }; ops.sort((a, b) => pos(a) - pos(b)); }
   ops = ops.map(op => ({ ...op, ...emitOp(op), skip: opSkip.has(opKey(op)) }));
+  for (const op of ops) { op.textRaw = op.text; op.text = toMachineFrame(op.text); }
   return {
     ops, minutes: ops.reduce((a, o) => a + (o.skip ? 0 : o.minutes), 0),
     notes: ops.flatMap(o => o.notes), preview: ops.flatMap(o => o.preview), rasters: ops.flatMap(o => o.rasters),
@@ -2271,10 +2292,13 @@ function draw() {
     for (const g of drag.guides) { ctx.beginPath(); if (g.x != null) { ctx.moveTo(X(g.x), 0); ctx.lineTo(X(g.x), H); } else { ctx.moveTo(0, Y(g.y)); ctx.lineTo(W, Y(g.y)); } ctx.stroke(); }
     ctx.setLineDash([]);
   }
-  ctx.fillStyle = "#cf222e"; ctx.beginPath(); ctx.arc(X(0), Y(0), 6, 0, 7); ctx.fill();
-  ctx.fillText("Start corner", X(0) + 10, Y(0) - 8);
+  { const O = typeof originOf === "function" && $("zeroXY") ? originOf() : { x: 0, y: 0 };
+    ctx.fillStyle = "#cf222e"; ctx.beginPath(); ctx.arc(X(O.x), Y(O.y), 6, 0, 7); ctx.fill();
+    ctx.strokeStyle = "#cf222e"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(X(O.x) - 12, Y(O.y)); ctx.lineTo(X(O.x) + 12, Y(O.y)); ctx.moveTo(X(O.x), Y(O.y) - 12); ctx.lineTo(X(O.x), Y(O.y) + 12); ctx.stroke();
+    ctx.fillText("Start (X0 Y0)", X(O.x) + 10, Y(O.y) - 8); }
   if (machinePos) {
-    const [mx, my] = machinePos;
+    const O0 = typeof originOf === "function" && $("zeroXY") ? originOf() : { x: 0, y: 0 };
+    const mx = machinePos[0] + O0.x, my = machinePos[1] + O0.y;
     ctx.strokeStyle = "#1a7f37"; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(X(mx), Y(my), 8, 0, 7); ctx.moveTo(X(mx) - 14, Y(my)); ctx.lineTo(X(mx) + 14, Y(my));
     ctx.moveTo(X(mx), Y(my) - 14); ctx.lineTo(X(mx), Y(my) + 14); ctx.stroke();
@@ -2355,6 +2379,7 @@ function refreshNow() {
     }
     { const live = lastJob.ops.filter(o => !o.skip), firstCut = live.findIndex(o => o.items.some(i => i.opts.mode === "cut"));
       if (firstCut >= 0 && live.slice(firstCut + 1).some(o => !o.plug && !o.items.every(i => i.opts.mode === "cut"))) msgs.push("A cut-out toolpath comes before other cutting – the piece may come loose first. Usually cut-outs go last."); }
+    if (($("zeroXY").value !== "fl" || $("zeroZ").value === "bottom") && !board.on) msgs.push("Job setup: that start point needs the size of your wood – tick 'Show my wood' and type its size.");
     if (lastJob.reliefD > 0) {
       const D = lastJob.reliefD;
       if (board.on && D > board.t - 3) msgs.push(`The 3D carving is ${fmt(D.toFixed(1))} mm deep but your wood is ${board.t} mm – press "📏 Fit to my wood" (in 2 How to cut) to scale it.`);
@@ -2640,7 +2665,7 @@ function simulateJob() {
     for (let dy = -rp; dy <= rp; dy++) for (let dx = -rp; dx <= rp; dx++) if (Math.hypot(dx, dy) <= rp + 0.5) ker.push(dy * W + dx, dx, dy, 0);
     ker.prof = prof;
     let x = 0, y = 0, z = 5;
-    for (const ln of op.text.split("\n")) {
+    for (const ln of (op.textRaw || op.text).split("\n")) {
       if (!/^G[01]\b/.test(ln)) continue;
       let m, nx = x, ny = y, nz = z;
       if ((m = ln.match(/X(-?[\d.]+)/))) nx = +m[1]; if ((m = ln.match(/Y(-?[\d.]+)/))) ny = +m[1]; if ((m = ln.match(/Z(-?[\d.]+)/))) nz = +m[1];
@@ -2778,6 +2803,7 @@ function finishSim() { clearInterval(simTimer); simState.stampTo(simState.moves.
 
 ["boardOn", "boardW", "boardH", "boardT"].forEach(id => $(id).addEventListener("input", () => { readBoard(); refresh(); }));
 $("boardFull").addEventListener("change", () => { readBoard(); refresh(); });
+["zeroXY", "zeroZ"].forEach(id => $(id).addEventListener("change", () => { if ($(id).value !== "fl" && $(id).value !== "top" && !$("boardOn").checked) { $("boardOn").checked = true; readBoard(); } updateZeroLabels(); refresh(); }));
 $("boardOn").addEventListener("change", () => { readBoard(); refresh(); });
 $("centreBtn").onclick = () => { $("boardOn").checked = true; centreOnBoard(); };
 $("previewBtn").onclick = () => openPreview();
@@ -3659,7 +3685,7 @@ $("wizResume").onclick = () => wizSquareCut();
 
 // ----- remember settings between visits -----
 const KEEP = ["material", "bit", "depth", "thick", "skin", "exact", "feed", "plunge", "stepdown", "spindle", "safe", "rH", "rRound",
-              "rBorder", "rLines", "rLineD", "rFinish", "plateT", "boardOn", "boardW", "boardH", "boardT", "boardFull", "dingOn", "rRough", "width", "offX", "offY", "detail", "imgKind", "fontSel", "boldIn"];
+              "rBorder", "rLines", "rLineD", "rFinish", "plateT", "boardOn", "boardW", "boardH", "boardT", "boardFull", "dingOn", "rRough", "zeroXY", "zeroZ", "width", "offX", "offY", "detail", "imgKind", "fontSel", "boldIn"];
 function saveSettings() {
   try {
     const o = { mode: mode() };
@@ -3721,7 +3747,7 @@ $("copyReportBtn").onclick = async () => {
 window.addEventListener("beforeunload", e => { if (running) { e.preventDefault(); e.returnValue = ""; } });
 
 if (!loadSettings()) applyPreset(); else refresh();
-readBoard();
+readBoard(); updateZeroLabels();
 // ----- website extras: works offline, can be installed like an app -----
 if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) navigator.serviceWorker.register("sw.js").catch(() => {});
 let installPrompt = null;
@@ -4133,7 +4159,7 @@ async function setView3d(on) {
 
 // ---------- menus, toolbar and status bar ----------
 const MENUS = {
-  File: [["New job", () => { if (!items.length || confirm("Start a new job? Unsaved changes will be lost.")) { pushUndo(true); items = []; multi.clear(); selectItem(null); } }],
+  File: [["Job setup…", () => { showTab("design"); $("boardBox").open = true; $("boardBox").scrollIntoView({ block: "center" }); }], ["New job", () => { if (!items.length || confirm("Start a new job? Unsaved changes will be lost.")) { pushUndo(true); items = []; multi.clear(); selectItem(null); } }],
          ["Ready-made projects…", () => { showTab("design"); $("projectSel").focus(); $("projectSel").showPicker?.(); }],
          ["Open a saved job…", () => $("openJobBtn").click()], ["Save job…", () => $("saveJobBtn").click()], "-",
          ["Import picture or SVG…", () => $("addDesignBtn").click()], ["Import a 3D model (STL)…", () => $("stlIn").click()], ["Take a photo of a drawing…", () => $("camBtn").click()], "-",
@@ -4236,7 +4262,7 @@ document.querySelectorAll(".nextBtn").forEach(b => b.onclick = () => showTab(b.d
 let startTab = "design"; try { startTab = localStorage.getItem("easyCarve.tab") || "design"; } catch {}
 showTab($("tab-" + startTab) ? startTab : "design");
 
-window.EasyCarve = { items: () => items, openToolLibrary, opKey, setOpOrder: o => { opOrder = o; }, setOpSkip: k => { opSkip = new Set(k); }, layerHeight, importSTL, stlHeightmap, parseSTL, makeMoulding, PROFILES, TEXTURES, setTool, combineShapes, offsetShape, mirrorSel, textOnCurve, undo, redo, selection, toEditable, rebuildVec, setView3d, vecOutline, reliefCombined, editGrid, reliefState, fitReliefToWood, openReliefEditor, layerHeightsDesign, alignPiece, showTab, straightenPage, serializeJob, loadJob, diaryLoad, announce, sim: () => simState, simulateJob, openPreview, finishSim, centreOnBoard, board, makeInlay, inlayMaleModel, startProject, jigsawDesign, PROJECTS, buildJob, selectItem, addItem, shapeDesign, loadSvgText, makeGcode, makeTextDesign, setDesign, buildReport, explain, onLine, resumePlan, jobLines };
+window.EasyCarve = { items: () => items, originOf, toMachineFrame, openToolLibrary, opKey, setOpOrder: o => { opOrder = o; }, setOpSkip: k => { opSkip = new Set(k); }, layerHeight, importSTL, stlHeightmap, parseSTL, makeMoulding, PROFILES, TEXTURES, setTool, combineShapes, offsetShape, mirrorSel, textOnCurve, undo, redo, selection, toEditable, rebuildVec, setView3d, vecOutline, reliefCombined, editGrid, reliefState, fitReliefToWood, openReliefEditor, layerHeightsDesign, alignPiece, showTab, straightenPage, serializeJob, loadJob, diaryLoad, announce, sim: () => simState, simulateJob, openPreview, finishSim, centreOnBoard, board, makeInlay, inlayMaleModel, startProject, jigsawDesign, PROJECTS, buildJob, selectItem, addItem, shapeDesign, loadSvgText, makeGcode, makeTextDesign, setDesign, buildReport, explain, onLine, resumePlan, jobLines };
 </script>
 </body>
 </html>
