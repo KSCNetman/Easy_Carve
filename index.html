@@ -129,6 +129,12 @@
   .ok { background: #dafbe1; color: var(--go); padding: 8px 10px; border-radius: 8px; }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
   .chip { padding: 6px 10px; border-radius: 999px; font-size: 14px; }
+  .opRow { display: flex; align-items: center; gap: 6px; padding: 5px 0; border-top: 1px solid rgba(0,0,0,.08); }
+  .opRow span { flex: 1; } .opRow button { padding: 3px 7px; font-size: 13px; }
+  .opRow.off span { opacity: .45; text-decoration: line-through; }
+  .tlTable input, .tlTable select { width: 100%; font-size: 13px; padding: 3px; }
+  .tlTable td, .tlTable th { padding: 2px 3px; font-size: 13px; text-align: left; }
+  .tlTable td:nth-child(1) { min-width: 150px; } .tlTable td:nth-child(n+3):nth-child(-n+6) input { width: 60px; }
   .chip.off { opacity: .45; text-decoration: line-through; }
   .chip.sel { background: #eef4ff; border-color: var(--accent); font-weight: 600; }
   .row.small button, .row.small select { padding: 7px 8px; font-size: 14px; }
@@ -148,7 +154,7 @@
 <header class="ws">
   <div class="brand">Easy Carve</div>
   <nav id="menubar"></nav>
-  <span class="hint" style="margin-left:auto">v2.1 · Genmitsu PROVerXL 4030</span>
+  <span class="hint" style="margin-left:auto">v2.2 · Genmitsu PROVerXL 4030</span>
   <button id="installBtn" hidden style="padding:4px 10px">Install</button>
   <span id="connBadge">Machine not connected</span>
 </header>
@@ -272,6 +278,7 @@
       <label><input type="radio" name="mode" value="engrave" checked><b>Engrave</b><span>Carve along the lines</span></label>
       <label><input type="radio" name="mode" value="vcarve"><b>V-carve</b><span>Crisp chiselled letters &amp; shapes</span></label>
       <label><input type="radio" name="mode" value="pocket"><b>Carve out</b><span>Hollow out the shapes / letters</span></label>
+      <label><input type="radio" name="mode" value="drill"><b>Drill holes</b><span>At the centre of each small circle</span></label>
       <label><input type="radio" name="mode" value="cut"><b>Cut out</b><span>Cut right through</span></label>
       <label><input type="radio" name="mode" value="relief"><b>3D raised</b><span>Rounded carving that stands up</span></label>
       <label id="plugModeLabel" hidden><input type="radio" name="mode" value="inlayM"><b>Inlay plug</b><span>Cut from the second wood</span></label>
@@ -319,6 +326,16 @@
     <button id="inlayBtn" style="width:100%;margin:4px 0 8px">🪵 Make an inlay from this piece…</button>
     <div id="vcHint" class="hint" hidden>The V-bit goes deeper where the shape is wider, giving sharp, chiselled edges like a sign-writer. Wide areas stop at the deepest setting and get a flat bottom.</div>
     <label id="thickRow" hidden>Material thickness <span><input id="thick" type="number" value="6" min="0.5" step="0.5"> mm</span></label>
+    <label id="sideRow" hidden>Cut along <select id="cutSide"><option value="out">the outside of the line (piece exact size)</option><option value="in">the inside of the line (hole exact size)</option><option value="on">the line itself</option></select></label>
+    <label id="holdRow" hidden>Hold the piece with <select id="hold"><option value="skin">a thin skin (0.4 mm)</option><option value="tabs">tabs</option><option value="none">nothing (screw it down)</option></select></label>
+    <div id="tabRows" hidden>
+      <label>Number of tabs <span><input id="tabN" type="number" value="4" min="1" max="20" step="1"></span></label>
+      <label>Tab width <span><input id="tabW" type="number" value="6" min="1" step="1"> mm</span></label>
+      <label>Tab thickness <span><input id="tabH" type="number" value="2" min="0.5" step="0.5"> mm</span></label>
+    </div>
+    <label id="clearRow" hidden>Clear the middle first with <select id="pClear"></select></label>
+    <label id="peckRow" hidden>Drill in steps of <span><input id="peck" type="number" value="2" min="0.3" step="0.5"> mm</span></label>
+    <label id="rampRow" class="check" hidden><input type="checkbox" id="ramp" checked><span>Ramp into the cut – slopes in instead of plunging (kinder to bits)</span></label>
     <label id="exactRow" class="check" hidden><input type="checkbox" id="exact" checked>
       <span>Cut around the outside so the piece comes out exactly the size shown</span></label>
     <label id="skinRow" class="check" hidden><input type="checkbox" id="skin" checked>
@@ -334,6 +351,7 @@
     <div id="estimate" class="hint"></div>
     <button id="previewBtn" class="big" style="background:#6e40c9;margin:6px 0" disabled>👀 Preview the finished piece</button>
     <div id="boundsWarn" class="warn" hidden></div>
+    <button id="toolLibBtn" style="width:100%;margin:6px 0">🧰 Tool library…</button>
     <button id="saveBtn" disabled>Save G-code file (to use in other software)</button>
     <button class="big nextBtn" data-next="machine" style="margin-top:10px">Next: Machine →</button>
   </div>
@@ -367,7 +385,7 @@
     <label class="check"><input type="checkbox" id="airRun">
       <span><b>Test run in the air.</b> Runs the whole job with the bit kept above the wood, to check it's in the right place.</span></label>
 
-    <div id="opsBox" class="warn" hidden><b>This job uses more than one bit.</b> Do one step at a time:<div id="opsList"></div></div>
+    <div id="opsBox" class="warn" hidden><b>Toolpaths</b> – done one at a time, top first. Untick to leave one out; ▲▼ to change the order; 💾 to save just that one.<div id="opsList"></div></div>
     <div class="row"><button id="startBtn" class="big go" disabled>Start</button></div>
     <div id="resumeBox" class="warn" hidden><div id="resumeText"></div><div class="row"><button id="resumeBtn">Carry on from where it stopped</button></div></div>
     <div class="row"><button id="pauseBtn" disabled>Pause</button><button id="stopBtn" class="stop" disabled>STOP</button></div>
@@ -457,7 +475,7 @@
 
 <script>
 "use strict";
-const APP = "Easy Carve v2.1";
+const APP = "Easy Carve v2.2";
 const $ = id => document.getElementById(id);
 
 // ================= Presets =================
@@ -490,6 +508,9 @@ const BED = { w: 400, h: 300 };
 const SKIN = 0.4;
 
 for (const [k, m] of Object.entries(MATERIALS)) $("material").add(new Option(m.name, k));
+const TOOLS_KEY = "easyCarve.tools";
+const BUILTIN_BITS = JSON.parse(JSON.stringify(BITS));
+loadTools();
 for (const [k, b] of Object.entries(BITS)) $("bit").add(new Option(b.name, k));
 for (const f of FONTS) { const o = new Option(f, f); o.style.fontFamily = `"${f}"`; $("fontSel").add(o); }
 
@@ -511,8 +532,10 @@ $("bit").onchange = applyPreset;
 const mode = () => document.querySelector("input[name=mode]:checked").value;
 function showModeRows() {
   const cut = mode() === "cut", rel = mode() === "relief";
-  $("depthRow").hidden = cut || rel; $("thickRow").hidden = !cut; $("skinRow").hidden = !cut; $("exactRow").hidden = !cut;
+  $("depthRow").hidden = cut || rel; $("thickRow").hidden = !cut; $("skinRow").hidden = true; $("exactRow").hidden = true;
   $("reliefRows").hidden = !rel;
+  $("sideRow").hidden = $("holdRow").hidden = !cut; $("tabRows").hidden = !cut || $("hold").value !== "tabs";
+  $("clearRow").hidden = mode() !== "pocket"; $("peckRow").hidden = mode() !== "drill"; $("rampRow").hidden = !(cut || mode() === "pocket");
   let kind = "shape"; try { kind = (sel() && sel().opts.rKind) || "shape"; } catch {}
   $("rMouldRow").hidden = kind !== "moulding"; $("rRoundRow").hidden = kind !== "shape";
   if ($("rEditBtn")) $("rEditBtn").disabled = kind === "moulding";
@@ -525,6 +548,7 @@ function showModeRows() {
   if (plug) $("depthRow").hidden = true;
   $("vcHint").hidden = mode() !== "vcarve";
 }
+$("hold").addEventListener("change", () => showModeRows());
 document.querySelectorAll("input[name=mode]").forEach(r => r.onchange = () => {
   showModeRows();
   const cut = mode() === "cut";
@@ -536,11 +560,11 @@ document.querySelectorAll("input[name=mode]").forEach(r => r.onchange = () => {
   if (mode() === "vcarve" && !BITS[$("bit").value].vbit) { $("bit").value = "vbit"; applyPreset(); return; }
   syncFromDom(); refresh();
 });
-["width", "offX", "offY", "rot", "rShade", "rBase", "rLimit", "rTilt", "rFade", "rTexAmp", "rTexScale", "rMouldW", "depth", "thick", "skin", "exact", "rH", "rRound", "rBorder", "rLines", "rLineD", "rFinish", "feed", "plunge", "stepdown", "spindle", "safe", "airRun"]
+["tabN", "tabW", "tabH", "peck", "width", "offX", "offY", "rot", "rShade", "rBase", "rLimit", "rTilt", "rFade", "rTexAmp", "rTexScale", "rMouldW", "depth", "thick", "skin", "exact", "rH", "rRound", "rBorder", "rLines", "rLineD", "rFinish", "feed", "plunge", "stepdown", "spindle", "safe", "airRun"]
   .forEach(id => $(id).addEventListener("input", () => { if (typeof syncFromDom === "function") syncFromDom(); refresh(); }));
 $("zoom").addEventListener("change", draw);
 $("rFinish").addEventListener("change", () => { syncFromDom(); refresh(); });
-["rShadeDir", "rCombine", "rProfile", "rDir", "rTex"].forEach(id => $(id).addEventListener("change", () => { syncFromDom(); refresh(); }));
+["cutSide", "hold", "pClear", "ramp", "rShadeDir", "rCombine", "rProfile", "rDir", "rTex"].forEach(id => $(id).addEventListener("change", () => { syncFromDom(); refresh(); }));
 $("rRough").addEventListener("change", () => refresh());
 ["skin", "exact", "rLines"].forEach(id => $(id).addEventListener("change", () => { syncFromDom(); refresh(); }));
 
@@ -1068,19 +1092,19 @@ $("useTextBtn").onclick = async () => { busy(true); await nextFrame(); makeTextD
 // ================= Layout: several pieces on one job =================
 let items = [], selId = null, itemSeq = 0, pendingAdd = false;
 const sel = () => items.find(i => i.id === selId) || null;
-const OPT_IDS = ["bit", "depth", "thick", "skin", "exact", "feed", "plunge", "stepdown", "rH", "rRound", "rBorder", "rLines", "rLineD", "rFinish", "inS", "inP",
+const OPT_IDS = ["cutSide", "hold", "tabN", "tabW", "tabH", "pClear", "peck", "ramp", "bit", "depth", "thick", "skin", "exact", "feed", "plunge", "stepdown", "rH", "rRound", "rBorder", "rLines", "rLineD", "rFinish", "inS", "inP",
                  "rShade", "rShadeDir", "rCombine", "rBase", "rProfile", "rLimit", "rTilt", "rDir", "rFade", "rTex", "rTexAmp", "rTexScale", "rMouldW"];
-const MODE_NAMES = { engrave: "Engrave", vcarve: "V-carve", pocket: "Carve out", cut: "Cut out", relief: "3D raised", inlayM: "Inlay plug" };
-const MODE_ORDER = { engrave: 0, vcarve: 1, pocket: 2, relief: 3, cut: 9, inlayM: 10 };
+const MODE_NAMES = { engrave: "Engrave", vcarve: "V-carve", pocket: "Carve out", cut: "Cut out", relief: "3D raised", inlayM: "Inlay plug", drill: "Drill" };
+const MODE_ORDER = { engrave: 0, vcarve: 1, pocket: 2, drill: 2.2, relief: 3, cut: 9, inlayM: 10 };
 
 function readOpts() {
   const o = { mode: mode() };
   for (const id of OPT_IDS) { const e = $(id); if (e) o[id] = e.type === "checkbox" ? e.checked : e.value; }
   return o;
 }
-const OPT_DEFAULTS = { rShade: 0, rShadeDir: "lower", rCombine: "top", rBase: 0, rProfile: "round", rLimit: 0, rTilt: 0, rDir: "0", rFade: 0, rTex: "", rTexAmp: 0.6, rTexScale: 6, rMouldW: 12 };
+const OPT_DEFAULTS = { tabN: 4, tabW: 6, tabH: 2, pClear: "", peck: 2, ramp: true, rShade: 0, rShadeDir: "lower", rCombine: "top", rBase: 0, rProfile: "round", rLimit: 0, rTilt: 0, rDir: "0", rFade: 0, rTex: "", rTexAmp: 0.6, rTexScale: 6, rMouldW: 12 };
 function writeOpts(o) {
-  o = { ...OPT_DEFAULTS, ...o };
+  o = { ...OPT_DEFAULTS, ...o, cutSide: cutSideOf(o), hold: holdOf(o) };
   for (const id of OPT_IDS) if (id in o && $(id)) { const e = $(id); if (e.type === "checkbox") e.checked = o[id]; else e.value = o[id]; }
   const r = document.querySelector(`input[name=mode][value=${o.mode}]`); if (r) r.checked = true;
   showModeRows();
@@ -1105,6 +1129,7 @@ function selectItem(id) {
 function syncFromDom() {
   const it = sel(); if (!it) return;
   it.opts = { ...it.opts, ...readOpts() };
+  it.opts.exact = it.opts.cutSide === "out"; it.opts.skin = it.opts.hold === "skin";
   it.w = Math.max(1, +$("width").value || it.w); it.x = +$("offX").value || 0; it.y = +$("offY").value || 0; it.rot = +$("rot").value || 0;
   $("heightOut").textContent = fmt(itemBox(it).h.toFixed(1));
   renderItemList();
@@ -1214,18 +1239,23 @@ function placedPaths(it) {
 // ----- toolpaths for one piece (in its own frame; moved into place when used) -----
 const tpCache = new Map();
 function toolpathsFor(it, S) {
-  const bitKey = it.opts.bit, key = JSON.stringify([localKey(it), S.mode, bitKey, it.opts.exact, S.vAngle, S.vMax, S.inS, S.inP]);
+  const bitKey = it.opts.bit, key = JSON.stringify([localKey(it), S.mode, bitKey, cutSideOf(it.opts), it.opts.pClear || "", S.vAngle, S.vMax, S.inS, S.inP, JSON.stringify(BITS[bitKey]), it.opts.pClear ? JSON.stringify(BITS[it.opts.pClear]) : ""]);
   if (tpCache.has(key)) return tpCache.get(key);
   const placed = localPaths(it).paths, r = BITS[bitKey].dia / 2;
   let val = { paths: placed, note: "" };
   const closed = placed.filter(p => p.closed), open = placed.filter(p => !p.closed);
-  if (S.mode === "cut" && it.opts.exact && closed.length) {
-    const R = rasterize(closed, r + 2);
-    const dist = edt(R.inside, R.W, R.H);
-    const lim = r * R.res + 0.5, v = new Float32Array(R.W * R.H);
-    for (let i = 0; i < v.length; i++) v[i] = lim - dist[i];
-    const outer = traceIso(v, R.W, R.H, 0).map(l => ({ closed: true, pts: rdp(l.map(R.toMm), 0.02) }));
-    val = { paths: [...outer, ...open], note: "" };
+  const side = cutSideOf(it.opts);
+  if (S.mode === "drill") {
+    const holes = closed.map(p => ({ drill: true, closed: false, pts: [polyCentroid(p.pts.slice(0, -1))] }));
+    val = { paths: holes, note: holes.length ? "" : "drilling needs small closed shapes (circles) – one hole at the centre of each." };
+  } else if (S.mode === "cut" && side !== "on" && closed.length) {
+    const R = rasterize(closed, r + 2), v = new Float32Array(R.W * R.H), lim = r * R.res + 0.5;
+    if (side === "out") { const dist = edt(R.inside, R.W, R.H); for (let i = 0; i < v.length; i++) v[i] = lim - dist[i]; }
+    else { const dist = edt(Uint8Array.from(R.inside, x => 1 - x), R.W, R.H); for (let i = 0; i < v.length; i++) v[i] = dist[i] - lim; }
+    const loops = traceIso(v, R.W, R.H, 0).map(l => ({ closed: true, tabbed: true, pts: rdp(l.map(R.toMm), 0.02) }));
+    val = { paths: [...loops, ...open], note: loops.length ? "" : "the shape is too small for this bit to cut inside it." };
+  } else if (S.mode === "cut") {
+    val = { paths: placed.map(p => ({ ...p, tabbed: p.closed })), note: "" };
   } else if (S.mode === "pocket") {
     if (!closed.length) val = { paths: placed, note: "no closed shapes to carve out, so it will engrave the lines instead." };
     else {
@@ -1233,7 +1263,17 @@ function toolpathsFor(it, S) {
       const notInside = new Uint8Array(R.inside.length); for (let i = 0; i < notInside.length; i++) notInside[i] = 1 - R.inside[i];
       const dist = edt(notInside, R.W, R.H);
       const stepover = BITS[bitKey].dia * 0.4, v = new Float32Array(R.W * R.H), rings = [];
+      // a bigger bit clears the middle first; this bit then only does the edge band and the tight places
+      const big = it.opts.pClear && BITS[it.opts.pClear] && BITS[it.opts.pClear].dia > BITS[bitKey].dia ? BITS[it.opts.pClear] : null;
+      const rBig = big ? big.dia / 2 : 0, clearRings = [];
+      if (big) for (let k = 0; k < 600; k++) {
+        const lim = (rBig + k * big.dia * 0.4) * R.res + 0.5;
+        for (let i = 0; i < v.length; i++) v[i] = dist[i] - lim;
+        const loops = traceIso(v, R.W, R.H, 0); if (!loops.length) break;
+        for (const l of loops) clearRings.push({ closed: true, pts: rdp(l.map(R.toMm), 0.02) });
+      }
       for (let k = 0; k < 600; k++) {
+        if (big && clearRings.length && r + k * stepover > rBig + r + 0.01) break;
         const lim = (r + k * stepover) * R.res + 0.5;
         for (let i = 0; i < v.length; i++) v[i] = dist[i] - lim;
         const loops = traceIso(v, R.W, R.H, 0);
@@ -1246,7 +1286,7 @@ function toolpathsFor(it, S) {
       let inside = 0, missed = 0;
       for (let i = 0; i < dist.length; i++) if (R.inside[i]) { inside++; if (dReach[i] > lim0 + 1.5) missed++; }
       const pct = inside ? Math.round(missed / inside * 100) : 0;
-      val = { paths: [...rings, ...open], note: !rings.length
+      val = { paths: [...rings, ...open], clearPaths: clearRings, note: !rings.length
         ? "the shapes are thinner than the bit, so nothing can be carved out. Make it bigger, pick a smaller bit, or use V-carve."
         : pct >= 3 ? `about ${pct}% is narrower than the bit and won't be carved. Make it bigger or pick a smaller bit (or use V-carve).` : "" };
     }
@@ -1312,7 +1352,7 @@ function orderPaths(paths) {
     let pts = p.pts;
     if (p.closed) { const ring = pts.slice(0, -1); pts = [...ring.slice(how.rot), ...ring.slice(0, how.rot)]; pts.push(pts[0]); }
     else if (how.rev) pts = pts.slice().reverse();
-    out.push({ closed: p.closed, pts, z: p.z });
+    out.push({ ...p, pts });                     // keep markers such as tabs and drill holes
     at = pts.at(-1);
   }
   return out;
@@ -1327,7 +1367,9 @@ function settingsFrom(o) {
   return {
     ...globalSettings(),
     mode: m, cut: m === "cut",
-    total: m === "inlayM" ? Math.max(+o.inP || 5.5, 0.5) : m === "relief" ? Math.max(0.5, +o.rH || 4) : m === "cut" ? (o.skin ? Math.max(0.1, thick - SKIN) : thick + 0.2) : (+o.depth || 0),
+    total: m === "inlayM" ? Math.max(+o.inP || 5.5, 0.5) : m === "relief" ? Math.max(0.5, +o.rH || 4) : m === "cut" ? (holdOf(o) === "skin" ? Math.max(0.1, thick - SKIN) : thick + 0.2) : (+o.depth || 0),
+    ramp: !!o.ramp && (m === "cut" || m === "pocket"), peck: +o.peck || 2,
+    tabs: m === "cut" && holdOf(o) === "tabs" ? { n: +o.tabN || 4, w: +o.tabW || 6, h: Math.min(+o.tabH || 2, thick - 0.2) } : null,
     feed: Math.max(10, +o.feed || 0), plunge: Math.max(10, +o.plunge || 0), step: Math.max(0.05, +o.stepdown || 0),
     reliefH: Math.max(0.5, +o.rH || 4), round: Math.max(0, +o.rRound || 0),
     border: Math.max(3, +o.rBorder || 8), lines: !!o.rLines,
@@ -1880,22 +1922,93 @@ function shadeHeightmap(surf, W, H, res, keep) {
 }
 
 // ================= G-code =================
+// ================= Toolpaths: cut side, holding, ramps, tabs, drilling =================
+const cutSideOf = o => o.cutSide || (o.exact === false ? "on" : "out");
+const holdOf = o => o.hold || (o.skin === false ? "none" : "skin");
+function polyCentroid(pts) {
+  let a = 0, cx = 0, cy = 0;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { const f = pts[j][0] * pts[i][1] - pts[i][0] * pts[j][1]; a += f; cx += (pts[j][0] + pts[i][0]) * f; cy += (pts[j][1] + pts[i][1]) * f; }
+  if (Math.abs(a) < 1e-9) { const n = pts.length; return [pts.reduce((s, p) => s + p[0], 0) / n, pts.reduce((s, p) => s + p[1], 0) / n]; }
+  return [cx / (3 * a), cy / (3 * a)];
+}
+// walk a closed loop at depth z, lifting to tabZ over the tab stretches; optional ramp down from zFrom over the first rampLen
+function loopMoves(pts, z, zFrom, rampLen, tabs, tabZ, F, push) {
+  const cum = [0]; for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+  const total = cum.at(-1); if (total <= 0) return 0;
+  const at = s => { let i = 1; while (i < cum.length - 1 && cum[i] < s) i++; const t = (s - cum[i - 1]) / Math.max(1e-9, cum[i] - cum[i - 1]); return [pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * t, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * t]; };
+  // every point where something changes
+  const marks = new Set(cum);
+  if (rampLen > 0) { marks.add(Math.min(rampLen, total)); for (let k = 1; k < 8; k++) marks.add(Math.min(rampLen, total) * k / 8); }
+  for (const [a, b] of tabs) { marks.add(a); marks.add(b); }
+  const S = [...marks].filter(v => v >= 0 && v <= total).sort((a, b) => a - b);
+  const zAt = sv => {
+    let zz = rampLen > 0 && sv < rampLen ? zFrom + (z - zFrom) * (sv / rampLen) : z;
+    for (const [a, b] of tabs) if (sv > a + 1e-6 && sv < b - 1e-6) zz = Math.max(zz, tabZ);
+    return zz;
+  };
+  let len = 0, curZ = zAt(0);
+  push(`G1 Z${fmt(curZ)} F${F.plunge}`);
+  for (let k = 1; k < S.length; k++) {
+    const [x, y] = at(S[k]), ramping = rampLen > 0 && S[k] <= rampLen + 1e-9;
+    if (ramping) { curZ = zAt(S[k]); push(`G1 X${fmt(x)} Y${fmt(y)} Z${fmt(curZ)}` + (k === 1 ? ` F${F.feed}` : "")); }
+    else {
+      const zz = zAt((S[k - 1] + S[k]) / 2);
+      if (Math.abs(zz - curZ) > 1e-9) { push(`G1 Z${fmt(zz)}`); curZ = zz; }       // straight up onto a tab / back down after it
+      push(`G1 X${fmt(x)} Y${fmt(y)}` + (k === 1 ? ` F${F.feed}` : ""));
+    }
+    len += S[k] - S[k - 1];
+  }
+  // after a ramp, go round the ramped stretch again at full depth so it is cut cleanly
+  if (rampLen > 0) { if (Math.abs(curZ - z) > 1e-9) push(`G1 Z${fmt(z)}`);
+    for (let k = 1; k < S.length && S[k] <= rampLen + 1e-6; k++) { const [x, y] = at(S[k]); push(`G1 X${fmt(x)} Y${fmt(y)}`); len += S[k] - S[k - 1]; } }
+  return len;
+}
+
 function emitPaths(g, paths, S, Z, dia) {
   let cutLen = 0, travel = 0, plunges = 0, at = [0, 0];
+  const F = { feed: fmt(S.feed), plunge: fmt(S.plunge) };
   paths.forEach((p, idx) => {
     let pts = p.pts.slice();
     const depth = p.z != null ? p.z : S.total;
-    const passes = p.one ? 1 : Math.max(1, Math.ceil(depth / S.step - 1e-9));
     g.push(`G0 X${fmt(pts[0][0])} Y${fmt(pts[0][1])}`);
     travel += Math.hypot(pts[0][0] - at[0], pts[0][1] - at[1]);
     g.push(`G0 Z${Z(0.5)}`);
-    for (let k = 1; k <= passes; k++) {
-      if (k > 1 && !p.closed) pts = pts.reverse();
-      g.push(`G1 Z${Z(-(passes === 1 ? depth : Math.min(depth, k * S.step)))} F${fmt(S.plunge)}`); plunges += depth / passes;
-      for (let i = 1; i < pts.length; i++) {
-        g.push(`G1 X${fmt(pts[i][0])} Y${fmt(pts[i][1])}` + (i === 1 ? ` F${fmt(S.feed)}` : ""));
-        cutLen += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+    if (p.drill) {                                              // peck drilling
+      const peck = Math.max(0.3, S.peck || 2);
+      for (let d = Math.min(peck, depth); ; d = Math.min(depth, d + peck)) {
+        g.push(`G1 Z${Z(-d)} F${F.plunge}`); plunges += peck;
+        if (d >= depth - 1e-9) break;
+        g.push(`G0 Z${Z(0.5)}`, `G0 Z${Z(-d + 0.3)}`);
       }
+      g.push(`G0 Z${Z(S.safe)}`); at = pts[0]; return;
+    }
+    const passes = p.one ? 1 : Math.max(1, Math.ceil(depth / S.step - 1e-9));
+    const closed = p.closed && pts.length > 3;
+    let perim = 0; for (let i = 1; i < pts.length; i++) perim += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+    const rampLen = S.ramp && closed && !p.one ? Math.min(perim * 0.45, Math.max(4 * dia, 10)) : 0;
+    // tabs: evenly spaced, clear of the ramp
+    let tabs = [];
+    if (p.tabbed && S.tabs && closed) {
+      const n = Math.max(1, S.tabs.n | 0), w = Math.max(1, S.tabs.w) + dia;
+      if (perim > n * w * 2.5) for (let k = 0; k < n; k++) { const c = rampLen + (perim - rampLen) * (k + 0.5) / n; tabs.push([c - w / 2, c + w / 2]); }
+    }
+    const tabZ = -(Math.max(0, depth - (S.tabs ? S.tabs.h : 0)));
+    let prevZ = 0;
+    for (let k = 1; k <= passes; k++) {
+      const zk = -(passes === 1 ? depth : Math.min(depth, k * S.step));
+      if (closed && (rampLen > 0 || tabs.length)) {
+        const useTabs = tabs.length && zk < tabZ - 1e-9 ? tabs : [];
+        cutLen += loopMoves(pts, +Z(zk), +Z(prevZ), rampLen, useTabs, +Z(tabZ), F, l => g.push(l));
+        plunges += (prevZ - zk);
+      } else {
+        if (k > 1 && !p.closed) pts = pts.reverse();
+        g.push(`G1 Z${Z(zk)} F${F.plunge}`); plunges += depth / passes;
+        for (let i = 1; i < pts.length; i++) {
+          g.push(`G1 X${fmt(pts[i][0])} Y${fmt(pts[i][1])}` + (i === 1 ? ` F${F.feed}` : ""));
+          cutLen += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+        }
+      }
+      prevZ = zk;
     }
     at = pts.at(-1);
     const next = paths[idx + 1];
@@ -1904,6 +2017,63 @@ function emitPaths(g, paths, S, Z, dia) {
   });
   return cutLen / S.feed + plunges / S.plunge + travel / 2000 + paths.length * 0.01;
 }
+
+// ================= Tool library =================
+function loadTools() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(TOOLS_KEY) || "null"); if (!saved) return;
+    for (const [k, b] of Object.entries(saved)) BITS[k] = { ...(BITS[k] || {}), ...b };
+    for (const k of Object.keys(BITS)) if (saved[k] && saved[k].deleted) delete BITS[k];
+  } catch {}
+}
+function saveTools() {
+  const out = {};
+  for (const [k, b] of Object.entries(BITS)) if (JSON.stringify(b) !== JSON.stringify(BUILTIN_BITS[k])) out[k] = b;
+  for (const k of Object.keys(BUILTIN_BITS)) if (!BITS[k]) out[k] = { deleted: true };
+  try { localStorage.setItem(TOOLS_KEY, JSON.stringify(out)); } catch {}
+}
+function fillBitSelects() {
+  const keep = $("bit").value, keepC = $("pClear").value;
+  $("bit").innerHTML = ""; for (const [k, b] of Object.entries(BITS)) $("bit").add(new Option(b.name, k));
+  $("pClear").innerHTML = ""; $("pClear").add(new Option("Nothing – just this bit", ""));
+  for (const [k, b] of Object.entries(BITS)) if (!b.vbit && !b.ball) $("pClear").add(new Option(b.name, k));
+  if (BITS[keep]) $("bit").value = keep; $("pClear").value = keepC;
+}
+function openToolLibrary() {
+  const typeOf = b => b.vbit ? "v" : b.ball ? "ball" : "flat";
+  const row = (k, b) => `<tr data-k="${k}"><td><input class="tlName" value="${b.name.replace(/"/g, "&quot;")}"></td>
+    <td><select class="tlType"><option value="flat"${typeOf(b) === "flat" ? " selected" : ""}>Flat</option><option value="ball"${typeOf(b) === "ball" ? " selected" : ""}>Ball-nose</option><option value="v"${typeOf(b) === "v" ? " selected" : ""}>V-bit</option></select></td>
+    <td><input class="tlDia" type="number" step="0.1" value="${b.dia}"></td><td><input class="tlAng" type="number" step="5" value="${b.angle || ""}" placeholder="–"></td>
+    <td><input class="tlFeed" type="number" step="0.05" value="${b.feedMul}"></td><td><input class="tlStep" type="number" step="0.05" value="${b.stepMul}"></td>
+    <td><button class="tlDel" title="Delete">✕</button></td></tr>`;
+  wiz("Tool library", `<p class="hint">Diameter in mm (for a V-bit: the tip width shown on screen). Angle for V-bits. Speed and depth are multipliers on the material's settings (1 = normal).</p>
+    <div style="max-height:46vh;overflow:auto"><table id="tlTable" class="tlTable"><tr><th>Name</th><th>Type</th><th>Dia</th><th>Angle</th><th>Speed ×</th><th>Depth ×</th><th></th></tr>
+    ${Object.entries(BITS).map(([k, b]) => row(k, b)).join("")}</table></div>
+    <div class="row small"><button id="tlAdd">＋ Add a bit</button><button id="tlReset">Reset to the standard bits</button></div>`,
+    [["Cancel", wizClose], ["Save", () => {
+      const next = {};
+      document.querySelectorAll("#tlTable tr[data-k]").forEach(tr => {
+        const k = tr.dataset.k, t = tr.querySelector(".tlType").value, b = { ...(BITS[k] || {}) };
+        b.name = tr.querySelector(".tlName").value.trim() || "Bit"; b.dia = Math.max(0.1, +tr.querySelector(".tlDia").value || 1);
+        b.vbit = t === "v"; b.ball = t === "ball"; if (b.vbit) b.angle = Math.max(10, Math.min(150, +tr.querySelector(".tlAng").value || 60)); else delete b.angle;
+        b.feedMul = Math.max(0.05, +tr.querySelector(".tlFeed").value || 1); b.stepMul = Math.max(0.05, +tr.querySelector(".tlStep").value || 1);
+        if (!b.vbit) delete b.vbit; if (!b.ball) delete b.ball; next[k] = b;
+      });
+      if (!Object.keys(next).length) return alert("Keep at least one bit.");
+      for (const k of Object.keys(BITS)) delete BITS[k]; Object.assign(BITS, next);
+      for (const it of items) if (!BITS[it.opts.bit]) it.opts.bit = Object.keys(BITS)[0];
+      saveTools(); fillBitSelects(); wizClose(); for (const it of items) presetFor(it.opts); selectItem(selId); localCache.clear(); tpCache.clear();
+    }, "main"]]);
+  $("tlAdd").onclick = () => { const k = "u" + Date.now(); $("tlTable").insertAdjacentHTML("beforeend", row(k, { name: "My new bit", dia: 3, feedMul: 1, stepMul: 1 })); wireDel(); };
+  $("tlReset").onclick = () => { if (!confirm("Go back to the standard bits? Your changes and added bits are removed.")) return;
+    for (const k of Object.keys(BITS)) delete BITS[k]; Object.assign(BITS, JSON.parse(JSON.stringify(BUILTIN_BITS))); saveTools(); fillBitSelects(); wizClose(); selectItem(selId); };
+  const wireDel = () => document.querySelectorAll(".tlDel").forEach(b => b.onclick = () => b.closest("tr").remove());
+  wireDel();
+}
+
+// ================= Toolpath list: order, on/off, save one =================
+let opOrder = [], opSkip = new Set();
+const opKey = op => op.bit + (op.plug ? "|plug" : "") + (op.rough ? "|rough" : "") + (op.clear ? "|clear" : "");
 
 function emitRaster(g, M, S, Z, ox, oy) {
   let len = 0, lastZ = 0;
@@ -1943,6 +2113,20 @@ function emitOp(op) {
   const its = op.items.slice().sort((a, b) => MODE_ORDER[a.opts.mode] - MODE_ORDER[b.opts.mode]);
   let maxDepth = 0;
   const layers = its.filter(it => it.opts.mode === "relief");
+  if (op.clearOf) {                                               // a bigger bit clears the middle of carve-outs
+    const g = [`(${APP} - clearing with ${BITS[op.bit].name}${G.air ? " - TEST RUN IN THE AIR" : ""})`];
+    let maxD = 0; for (const it of op.clearOf) maxD = Math.max(maxD, settingsFrom(it.opts).total);
+    const lift = G.air ? maxD + 3 : 0, Z = v => fmt(v + lift);
+    g.push("G21 G90 G17 G94", `G0 Z${Z(G.safe)}`, `M3 S${fmt(G.spindle)}`, "G4 P3");
+    let minutes = 0.05; const preview = [];
+    for (const it of op.clearOf) {
+      const o2 = { ...it.opts, bit: op.bit }; presetFor(o2); const S2 = settingsFrom(o2), tp = toolpathsFor(it, settingsFrom(it.opts));
+      const paths = orderPaths(shift(tp.clearPaths || [], it.x, it.y)); g.push(`(${it.name} - clearing)`);
+      minutes += emitPaths(g, paths, { ...S2, total: settingsFrom(it.opts).total }, Z, BITS[op.bit].dia); for (const q of paths) preview.push({ ...q, item: it.id });
+    }
+    g.push("M5", `G0 Z${Z(G.safe)}`, "G0 X0 Y0", "(done)");
+    return { text: g.join("\n") + "\n", minutes, notes: [], preview, rasters: [], maxDepth: maxD, reliefD: 0 };
+  }
   const roughing = $("rRough").checked;
   if (op.roughOf) {                                               // the 6 mm flat bit roughing step
     const M = reliefCombined(op.roughOf, op.roughOf[0].opts.bit, true), F = M.flat;
@@ -2001,10 +2185,15 @@ function buildJob() {
       ops.push(ro);
     }
   }
+  const clears = new Map();
+  for (const it of items) if (it.opts.mode === "pocket" && it.opts.pClear && BITS[it.opts.pClear] && BITS[it.opts.pClear].dia > BITS[it.opts.bit].dia) {
+    if (!clears.has(it.opts.pClear)) clears.set(it.opts.pClear, []); clears.get(it.opts.pClear).push(it); }
+  for (const [bit, its] of clears) ops.push({ bit, items: its, clearOf: its, last: 1.9, clear: true });
   ops.sort((a, b) => a.last - b.last);                    // anything that cuts pieces free goes last
-  ops = ops.map(op => ({ ...op, ...emitOp(op) }));
+  if (opOrder.length) { const pos = op => { const i = opOrder.indexOf(opKey(op)); return i < 0 ? 1e6 + op.last : i; }; ops.sort((a, b) => pos(a) - pos(b)); }
+  ops = ops.map(op => ({ ...op, ...emitOp(op), skip: opSkip.has(opKey(op)) }));
   return {
-    ops, minutes: ops.reduce((a, o) => a + o.minutes, 0),
+    ops, minutes: ops.reduce((a, o) => a + (o.skip ? 0 : o.minutes), 0),
     notes: ops.flatMap(o => o.notes), preview: ops.flatMap(o => o.preview), rasters: ops.flatMap(o => o.rasters),
     maxDepth: Math.max(0, ...ops.map(o => o.maxDepth)), reliefD: Math.max(0, ...ops.map(o => o.reliefD || 0)), S: settings(),
   };
@@ -2164,6 +2353,8 @@ function refreshNow() {
       if (it.opts.mode === "vcarve" && !b.vbit) msgs.push(`${it.name}: V-carve needs a V-bit.`);
       if (it.opts.mode === "cut" && !it.opts.skin) msgs.push(`${it.name}: without the skin, screw or clamp the piece so it can't be thrown when it comes loose.`);
     }
+    { const live = lastJob.ops.filter(o => !o.skip), firstCut = live.findIndex(o => o.items.some(i => i.opts.mode === "cut"));
+      if (firstCut >= 0 && live.slice(firstCut + 1).some(o => !o.plug && !o.items.every(i => i.opts.mode === "cut"))) msgs.push("A cut-out toolpath comes before other cutting – the piece may come loose first. Usually cut-outs go last."); }
     if (lastJob.reliefD > 0) {
       const D = lastJob.reliefD;
       if (board.on && D > board.t - 3) msgs.push(`The 3D carving is ${fmt(D.toFixed(1))} mm deep but your wood is ${board.t} mm – press "📏 Fit to my wood" (in 2 How to cut) to scale it.`);
@@ -2178,24 +2369,33 @@ function refreshNow() {
   renderOps(); updateButtons(); draw();
 }
 
+function opLabel(op) { return `${BITS[op.bit].name}${op.plug ? " – on the SECOND piece of wood" : op.rough ? " – roughing out the 3D carving" : op.clear ? " – clearing the middle of carve-outs" : ""}`; }
 function renderOps() {
   const ops = lastJob ? lastJob.ops : [];
   if (opIndex >= ops.length) opIndex = 0;
-  $("opsBox").hidden = ops.length < 2;
+  if (ops[opIndex] && ops[opIndex].skip) { const k = ops.findIndex(o => !o.skip); if (k >= 0) opIndex = k; }
+  $("opsBox").hidden = !ops.length;
   $("opsList").innerHTML = "";
   ops.forEach((op, i) => {
-    const l = document.createElement("label"); l.className = "check";
-    const r = document.createElement("input"); r.type = "radio"; r.name = "op"; r.checked = i === opIndex; r.onchange = () => { opIndex = i; };
-    const s = document.createElement("span");
-    s.innerHTML = `<b>Step ${i + 1}: ${BITS[op.bit].name}${op.plug ? " – on the SECOND piece of wood" : op.rough ? " – roughing out the 3D carving" : ""}</b><br><small></small>`;
+    const row = document.createElement("div"); row.className = "opRow" + (op.skip ? " off" : "");
+    const r = document.createElement("input"); r.type = "radio"; r.name = "op"; r.checked = i === opIndex; r.disabled = op.skip; r.title = "Start runs this one"; r.onchange = () => { opIndex = i; };
+    const on = document.createElement("input"); on.type = "checkbox"; on.checked = !op.skip; on.title = "Include this toolpath";
+    on.onchange = () => { on.checked ? opSkip.delete(opKey(op)) : opSkip.add(opKey(op)); refresh(); };
+    const s = document.createElement("span"); s.innerHTML = `<b></b><br><small></small>`;
+    s.querySelector("b").textContent = `${i + 1}. ${opLabel(op)}`;
     s.querySelector("small").textContent = `${op.items.map(it => it.name).join(", ")} · about ${Math.ceil(op.minutes)} min`;
-    l.append(r, s); $("opsList").append(l);
+    const mv = (d) => () => { const keys = ops.map(opKey), j = i + d; if (j < 0 || j >= keys.length) return; [keys[i], keys[j]] = [keys[j], keys[i]]; opOrder = keys; if (opIndex === i) opIndex = j; refresh(); };
+    const up = document.createElement("button"); up.textContent = "▲"; up.disabled = i === 0; up.onclick = mv(-1);
+    const dn = document.createElement("button"); dn.textContent = "▼"; dn.disabled = i === ops.length - 1; dn.onclick = mv(1);
+    const sv = document.createElement("button"); sv.textContent = "💾"; sv.title = "Save just this toolpath as G-code";
+    sv.onclick = () => download(`easy-carve-${i + 1}-${op.bit}${op.rough ? "-rough" : op.clear ? "-clear" : ""}.nc`, buildJob().ops[i].text);
+    row.append(on, r, s, up, dn, sv); $("opsList").append(row);
   });
 }
 
 $("saveBtn").onclick = () => {
   const J = buildJob();
-  J.ops.forEach((op, i) => download(`${J.S.air ? "TEST-" : ""}easy-carve${J.ops.length > 1 ? `-step${i + 1}-${op.bit}` : ""}.nc`, op.text));
+  J.ops.forEach((op, i) => { if (!op.skip) download(`${J.S.air ? "TEST-" : ""}easy-carve${J.ops.length > 1 ? `-step${i + 1}-${op.bit}` : ""}.nc`, op.text); });
 };
 function download(name, text) {
   const a = document.createElement("a");
@@ -2422,7 +2622,7 @@ function centreOnBoard() {
 function simulateJob() {
   const air = $("airRun").checked; $("airRun").checked = false;
   let J; try { J = buildJob(); } finally { $("airRun").checked = air; }
-  const ops = J.ops.filter(o => !o.plug);
+  const ops = J.ops.filter(o => !o.plug && !o.skip);
   let [x0, y0, x1, y1] = jobBounds(false);
   if (board.on) { x0 = Math.min(x0, 0); y0 = Math.min(y0, 0); x1 = Math.max(x1, board.w); y1 = Math.max(y1, board.h); }
   x0 -= 6; y0 -= 6; x1 += 6; y1 += 6;
@@ -3298,6 +3498,7 @@ $("startBtn").onclick = async () => {
   const J = buildJob(); if (!J.ops.length) return;
   if (opIndex >= J.ops.length) opIndex = 0;
   const op = J.ops[opIndex], multi = J.ops.length > 1, air = J.S.air;
+  if (op.skip) return alert("That toolpath is switched off in the list – tick it first.");
   const head = (multi ? `STEP ${opIndex + 1} OF ${J.ops.length}: the ${BITS[op.bit].name} bit must be fitted.\n\n` : "") +
     (op.plug ? "INLAY PLUG: clamp the SECOND piece of wood (the plug wood) and set the start corner AND surface on it first.\n\n" : "");
   const ok = confirm(head + (air
@@ -3482,6 +3683,8 @@ function loadSettings() {
 let saveTimer = null;
 document.addEventListener("input", () => { clearTimeout(saveTimer); saveTimer = setTimeout(saveSettings, 500); });
 document.addEventListener("change", saveSettings);
+window.addEventListener("pagehide", saveSettings);              // don't lose a setting typed just before closing
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") saveSettings(); });
 
 // ================= Help report =================
 const SETTING_NAMES = { 20: "soft limits", 21: "hard limits", 22: "homing", 23: "homing direction", 30: "spindle max", 31: "spindle min",
@@ -3940,7 +4143,7 @@ const MENUS = {
          ["Offset…", offsetShape], ["Mirror left–right", () => mirrorSel("h")], ["Mirror top–bottom", () => mirrorSel("v")], ["Text along a curve…", textOnCurve], ["Make points editable", () => { const it = sel(); if (it && it.vec) { pushUndo(true); toEditable(it); setTool("nodes"); refresh(); } else alert("Pick a shape drawn in Easy Carve first."); }]],
   View: [["2D view", () => setView3d(false)], ["3D view", () => setView3d(true)], ["Zoom to the job", () => { $("zoom").checked = true; draw(); }], ["Show the whole machine", () => { $("zoom").checked = false; draw(); }],
          ["Show my piece of wood", () => { showTab("design"); $("boardBox").open = true; $("boardOn").checked = true; readBoard(); refresh(); }], ["Preview the cut (animation)…", () => $("previewBtn").click()]],
-  Toolpaths: [["Toolpath settings", () => showTab("cut")], ["Preview the cut…", () => $("previewBtn").click()], ["Save G-code…", () => $("saveBtn").click()]],
+  Toolpaths: [["Toolpath settings", () => showTab("cut")], ["Tool library…", () => openToolLibrary()], ["Preview the cut…", () => $("previewBtn").click()], ["Save G-code…", () => $("saveBtn").click()]],
   Machine: [["Machine panel", () => showTab("machine")], ["Connect", () => { showTab("machine"); $("connectBtn").click(); }], ["Check my machine…", () => { showTab("machine"); $("checkBtn").click(); }], ["Copy report for help", () => { showTab("machine"); $("helpBox").open = true; $("copyReportBtn").click(); }]],
   Help: [["Quick guide (PDF)", () => window.open("quick-guide.pdf", "_blank")], ["What do the error numbers mean?", () => { showTab("machine"); $("helpBox").open = true; }], ["About Easy Carve", () => alert(`${APP}\nFor the Genmitsu PROVerXL 4030 (GRBL).`)]],
 };
@@ -3995,6 +4198,9 @@ $("stlIn").onchange = async e => { const f = e.target.files[0]; e.target.value =
 $("make3dBtn").onclick = () => { if (!sel()) return; document.querySelector("label:has(input[value=relief])").click(); renderLayers(); };
 renderLayers();
 
+$("toolLibBtn").onclick = () => openToolLibrary();
+fillBitSelects();
+
 // ----- line up all the setting boxes -----
 function tidyRows(root = document) {
   root.querySelectorAll(".panel label:not(.check), dialog label:not(.check)").forEach(l => {
@@ -4030,7 +4236,7 @@ document.querySelectorAll(".nextBtn").forEach(b => b.onclick = () => showTab(b.d
 let startTab = "design"; try { startTab = localStorage.getItem("easyCarve.tab") || "design"; } catch {}
 showTab($("tab-" + startTab) ? startTab : "design");
 
-window.EasyCarve = { items: () => items, layerHeight, importSTL, stlHeightmap, parseSTL, makeMoulding, PROFILES, TEXTURES, setTool, combineShapes, offsetShape, mirrorSel, textOnCurve, undo, redo, selection, toEditable, rebuildVec, setView3d, vecOutline, reliefCombined, editGrid, reliefState, fitReliefToWood, openReliefEditor, layerHeightsDesign, alignPiece, showTab, straightenPage, serializeJob, loadJob, diaryLoad, announce, sim: () => simState, simulateJob, openPreview, finishSim, centreOnBoard, board, makeInlay, inlayMaleModel, startProject, jigsawDesign, PROJECTS, buildJob, selectItem, addItem, shapeDesign, loadSvgText, makeGcode, makeTextDesign, setDesign, buildReport, explain, onLine, resumePlan, jobLines };
+window.EasyCarve = { items: () => items, openToolLibrary, opKey, setOpOrder: o => { opOrder = o; }, setOpSkip: k => { opSkip = new Set(k); }, layerHeight, importSTL, stlHeightmap, parseSTL, makeMoulding, PROFILES, TEXTURES, setTool, combineShapes, offsetShape, mirrorSel, textOnCurve, undo, redo, selection, toEditable, rebuildVec, setView3d, vecOutline, reliefCombined, editGrid, reliefState, fitReliefToWood, openReliefEditor, layerHeightsDesign, alignPiece, showTab, straightenPage, serializeJob, loadJob, diaryLoad, announce, sim: () => simState, simulateJob, openPreview, finishSim, centreOnBoard, board, makeInlay, inlayMaleModel, startProject, jigsawDesign, PROJECTS, buildJob, selectItem, addItem, shapeDesign, loadSvgText, makeGcode, makeTextDesign, setDesign, buildReport, explain, onLine, resumePlan, jobLines };
 </script>
 </body>
 </html>
