@@ -24,10 +24,10 @@
   .mbList button { text-align: left; border: none; background: none; padding: 7px 12px; font-size: 14px; border-radius: 6px; }
   .mbList button:hover { background: #eef4ff; }
   .mbList hr { border: none; border-top: 1px solid var(--line); margin: 4px 0; width: 100%; }
-  #toolbar { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 10px; background: var(--panel); border-bottom: 1px solid var(--line); align-items: stretch; }
+  #toolbar { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 4px; padding: 4px 10px; background: var(--panel); border-bottom: 1px solid var(--line); align-items: stretch; }
   #toolbar .tg { display: flex; gap: 2px; padding-right: 6px; border-right: 1px solid var(--line); align-items: center; }
   #toolbar .tg:last-child { border-right: none; }
-  #toolbar button { display: flex; flex-direction: column; align-items: center; padding: 3px 7px; min-width: 46px; font-size: 18px; line-height: 1.1; border: 1px solid transparent; background: none; border-radius: 7px; }
+  #toolbar button { display: flex; flex-direction: column; align-items: center; padding: 3px 5px; min-width: 40px; flex: none; font-size: 18px; line-height: 1.1; border: 1px solid transparent; background: none; border-radius: 7px; }
   #toolbar button small { font-size: 11px; color: var(--muted); }
   #toolbar button:hover:not(:disabled) { background: #f2f2f2; }
   #toolbar button.sel { background: #eef4ff; border-color: var(--accent); }
@@ -421,7 +421,7 @@
   <div class="legend">
     <span><i style="background:#1f6feb"></i>Bit path</span>
     <span><i style="background:#888"></i>Your design</span>
-    <span><i style="background:#cf222e"></i>Start corner (front-left)</span>
+    <span><i style="background:#cf222e"></i>Start point (X0 Y0)</span>
     <span><i style="background:#bbb"></i>Machine area</span>
     <span><i style="background:#1a7f37"></i>Where the bit is now</span>
   </div>
